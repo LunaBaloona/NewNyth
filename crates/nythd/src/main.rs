@@ -450,10 +450,10 @@ fn handle_event(
 
 /// Set up SIGINT/SIGTERM handler using a simple pipe-based approach.
 fn ctrlc_handler(running: Arc<AtomicBool>) -> Result<(), std::io::Error> {
-    // Use unsafe signal handler since we just set an atomic bool.
+    // Use unsafe signal handler since we just set an atomic bool and fix usize for git build.
     unsafe {
-        nix::libc::signal(nix::libc::SIGTERM, handle_signal as usize);
-        nix::libc::signal(nix::libc::SIGINT, handle_signal as usize);
+        nix::libc::signal(nix::libc::SIGTERM, handle_signal as *const () as usize);
+        nix::libc::signal(nix::libc::SIGINT, handle_signal as *const () as usize);
     }
 
     // Store the running flag in a static so the signal handler can reach it.
