@@ -1,6 +1,6 @@
 # NewNyth
 
-**Morern Linux driver and configuration tools for the Roccat Nyth gaming mouse**, rewritten in (everybody's favourite) Rust.
+**Modern Linux driver and configuration tools for the Roccat Nyth gaming mouse**, rewritten in (everybody's favourite) Rust.
 
 [![Build](https://github.com/LunaBaloona/NewNyth/actions/workflows/build.yml/badge.svg)](https://github.com/LunaBaloona/NewNyth/actions/workflows/build.yml)
 [![Licence: GPL-2.0-or-later](https://img.shields.io/badge/licence-GPL--2.0--or--later-blue.svg)](LICENSE)
