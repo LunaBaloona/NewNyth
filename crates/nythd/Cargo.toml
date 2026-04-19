@@ -1,0 +1,20 @@
+[package]
+name = "nythd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NewNyths event daemon for the Roccat Nyth mouse"
+
+[[bin]]
+name = "nythd"
+path = "src/main.rs"
+
+[dependencies]
+roccat-nyth-hid = { path = "../roccat-nyth-hid" }
+roccat-nyth-profile = { path = "../roccat-nyth-profile" }
+log.workspace = true
+env_logger.workspace = true
+dbus.workspace = true
+dbus-crossroads.workspace = true
+nix.workspace = true
+bytemuck.workspace = true

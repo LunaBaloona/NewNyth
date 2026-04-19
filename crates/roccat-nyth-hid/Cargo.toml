@@ -1,0 +1,12 @@
+[package]
+name = "roccat-nyth-hid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NewNyth's low-level HID communication and protocol structs for the Roccat Nyth mouse"
+
+[dependencies]
+thiserror.workspace = true
+log.workspace = true
+nix.workspace = true
+bytemuck.workspace = true

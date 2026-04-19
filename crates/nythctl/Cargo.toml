@@ -1,0 +1,18 @@
+[package]
+name = "nythctl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NewNyth CLI control tool for the Roccat Nyth mouse"
+
+[[bin]]
+name = "nythctl"
+path = "src/main.rs"
+
+[dependencies]
+roccat-nyth-hid = { path = "../roccat-nyth-hid" }
+roccat-nyth-profile = { path = "../roccat-nyth-profile" }
+clap.workspace = true
+log.workspace = true
+env_logger.workspace = true
+dbus.workspace = true

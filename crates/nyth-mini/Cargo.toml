@@ -1,0 +1,18 @@
+[package]
+name = "nyth-mini"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NewNyth Mini is compact profile switcher for the Roccat Nyth mouse"
+
+[[bin]]
+name = "newnyth-mini"
+path = "src/main.rs"
+
+[dependencies]
+roccat-nyth-hid = { path = "../roccat-nyth-hid" }
+roccat-nyth-profile = { path = "../roccat-nyth-profile" }
+eframe.workspace = true
+image = { version = "0.24", default-features = false, features = ["png"] }
+log.workspace = true
+env_logger.workspace = true

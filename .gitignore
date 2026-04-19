@@ -1,0 +1,29 @@
+# Rust build artefacts
+/target/
+**/*.rs.bk
+**/target/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Arch package build outputs
+/src/
+/pkg/
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.tar.gz
+*.tar.xz
+*.src.tar.gz
+
+# Python artefacts
+__pycache__/
+*.pyc
+
+# Env / secrets
+.env
+.env.local
