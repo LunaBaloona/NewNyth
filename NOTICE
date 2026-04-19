@@ -1,0 +1,40 @@
+NewNyth is a modern Linux driver and configuration tool for the Roccat Nyth mouse
+
+Copyright (C) 2026 NewNyth Contributors
+
+This program is derived from `roccat-tools` version 5.9.1:
+    Copyright (C) 2010-2019 Stefan Achatz
+    https://sourceforge.net/projects/roccat/
+    Originally licensed under the GNU General Public License v2.0 or later.
+
+The following components were ported from C to Rust:
+
+  - The USB HID protocol structures and wire formats
+    (originally in: libroccatnyth/nyth_*.c, nyth_*.h)
+
+  - Device enumeration and hidraw ioctl communication
+    (originally in: libroccat/roccat_device_hidraw.c)
+
+  - SpecialReport event parsing and handler dispatch
+    (originally in: libnytheventhandler/nyth_eventhandler.c)
+
+  - Button type definitions, HID keycode mappings, and
+    profile/settings/button data structures
+    (originally in: libroccat/roccat_button.c, libroccatnyth/nyth.h)
+
+Only the Nyth-specific code from roccat-tools has been carried forward.
+All other device support (Kone, Ryos, Tyon, etc.) has been omitted.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, see <https://www.gnu.org/licenses/>
+or the LICENSE file in this distribution.

@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libdbus-1-dev \
+            pkg-config \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libx11-dev \
+            libfontconfig1-dev \
+            mesa-common-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Build (all crates)
+        run: cargo build --release --all
+
+      - name: Run tests (non-GUI crates)
+        run: |
+          cargo test --release \
+            -p roccat-nyth-hid \
+            -p roccat-nyth-profile \
+            -p nythctl \
+            -p nythd
+
+      - name: Clippy (non-GUI crates)
+        run: |
+          cargo clippy --release \
+            -p roccat-nyth-hid \
+            -p roccat-nyth-profile \
+            -p nythctl \
+            -p nythd \
+            -- -D warnings

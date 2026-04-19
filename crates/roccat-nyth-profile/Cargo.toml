@@ -1,0 +1,14 @@
+[package]
+name = "roccat-nyth-profile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NewNyth's high-level profile, button, and macro management for the Roccat Nyth mouse"
+
+[dependencies]
+roccat-nyth-hid = { path = "../roccat-nyth-hid" }
+thiserror.workspace = true
+log.workspace = true
+bytemuck.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "nyth-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "NewNyth's main GUI configuration tool for the Roccat Nyth mouse"
+
+[[bin]]
+name = "newnyth"
+path = "src/main.rs"
+
+[dependencies]
+roccat-nyth-hid = { path = "../roccat-nyth-hid" }
+roccat-nyth-profile = { path = "../roccat-nyth-profile" }
+eframe.workspace = true
+image = { version = "0.24", default-features = false, features = ["png"] }
+dbus.workspace = true
+log.workspace = true
+env_logger.workspace = true
