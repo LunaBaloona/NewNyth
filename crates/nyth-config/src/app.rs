@@ -145,12 +145,16 @@ impl NythConfigApp {
 // ─── Main update loop ──────────────────────────────────────────────
 
 impl eframe::App for NythConfigApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Panels below need `ui` mutably, so grab a cheap context handle up
+        // front (Context is an Arc internally; cloning is cheap).
+        let ctx = ui.ctx().clone();
+
         // ── Left side panel ────────────────────────────
-        egui::SidePanel::left("device_panel")
-            .min_width(180.0)
-            .max_width(210.0)
-            .show(ctx, |ui| {
+        egui::Panel::left("device_panel")
+            .min_size(180.0)
+            .max_size(210.0)
+            .show(ui, |ui| {
                 ui.heading("NewNyth");
                 ui.separator();
 
@@ -199,16 +203,15 @@ impl eframe::App for NythConfigApp {
                         && self.selected_profile != self.state.active_profile
                     {
                         let idx = self.selected_profile;
-                        self.activate_profile_on_device(idx, ctx);
+                        self.activate_profile_on_device(idx, &ctx);
                     }
 
                     if !self.auto_apply_profile
                         && self.selected_profile != self.state.active_profile
+                        && ui.button("Activate on device").clicked()
                     {
-                        if ui.button("Activate on device").clicked() {
-                            let idx = self.selected_profile;
-                            self.activate_profile_on_device(idx, ctx);
-                        }
+                        let idx = self.selected_profile;
+                        self.activate_profile_on_device(idx, &ctx);
                     }
                 } else {
                     ui.colored_label(egui::Color32::from_rgb(200, 80, 80), "No device found");
@@ -219,7 +222,7 @@ impl eframe::App for NythConfigApp {
 
                 ui.add_space(16.0);
                 if ui.button("↻ Refresh").clicked() {
-                    self.reload_device(ctx);
+                    self.reload_device(&ctx);
                 }
 
                 ui.add_space(16.0);
@@ -240,7 +243,7 @@ impl eframe::App for NythConfigApp {
                 });
             });
 
-        egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+        egui::Panel::bottom("status_bar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 if let Some((ref msg, ts)) = self.status_message {
                     if ui.input(|i| i.time) - ts < 5.0 {
@@ -262,7 +265,7 @@ impl eframe::App for NythConfigApp {
                     .any(|a| a.to_lowercase() == app_class.to_lowercase());
 
                 if already_exists {
-                    self.set_status(format!("'{}' is already assigned", app_class), ctx);
+                    self.set_status(format!("'{}' is already assigned", app_class), &ctx);
                 } else if slot_idx < apps.len() {
                     // Replace existing slot.
                     apps[slot_idx] = app_class.clone();
@@ -274,7 +277,7 @@ impl eframe::App for NythConfigApp {
                             profile_idx + 1,
                             slot_idx + 1
                         ),
-                        ctx,
+                        &ctx,
                     );
                 } else if apps.len() < roccat_nyth_profile::config::MAX_APPS_PER_PROFILE {
                     // Append to next empty slot.
@@ -282,16 +285,16 @@ impl eframe::App for NythConfigApp {
                     self.autoswitch_dirty = true;
                     self.set_status(
                         format!("Captured: {} → MP {}", app_class, profile_idx + 1),
-                        ctx,
+                        &ctx,
                     );
                 } else {
-                    self.set_status("All slots full", ctx);
+                    self.set_status("All slots full", &ctx);
                 }
             }
             ctx.request_repaint_after(std::time::Duration::from_millis(200));
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             if !self.state.connected {
                 ui.centered_and_justified(|ui| {
                     ui.heading("No Roccat Nyth detected");
@@ -299,10 +302,10 @@ impl eframe::App for NythConfigApp {
                 return;
             }
             match self.section {
-                Section::Settings => self.ui_settings(ui, ctx),
-                Section::Buttons => self.ui_buttons(ui, ctx),
-                Section::Lighting => self.ui_lighting(ui, ctx),
-                Section::AutoSwitch => self.ui_autoswitch(ui, ctx),
+                Section::Settings => self.ui_settings(ui, &ctx),
+                Section::Buttons => self.ui_buttons(ui, &ctx),
+                Section::Lighting => self.ui_lighting(ui, &ctx),
+                Section::AutoSwitch => self.ui_autoswitch(ui, &ctx),
             }
         });
     }
@@ -354,7 +357,7 @@ impl NythConfigApp {
                                 )
                                 .step_by(NYTH_CPI_STEP as f64)
                                 .suffix(" DPI")
-                                .clamp_to_range(true),
+                                .clamping(egui::SliderClamping::Always),
                             )
                             .changed()
                         {
@@ -629,7 +632,10 @@ impl NythConfigApp {
                 for i in range {
                     // Insert separator between groups of N.
                     let pos_in_range = i - start;
-                    if group_every > 0 && pos_in_range > 0 && pos_in_range % group_every == 0 {
+                    if group_every > 0
+                        && pos_in_range > 0
+                        && pos_in_range.is_multiple_of(group_every)
+                    {
                         ui.separator();
                         ui.separator();
                         ui.end_row();
@@ -693,7 +699,7 @@ impl NythConfigApp {
                     };
 
                     let mut changed = false;
-                    egui::ComboBox::from_id_source(format!("btn_{i}"))
+                    egui::ComboBox::from_id_salt(format!("btn_{i}"))
                         .selected_text(&display_text)
                         .width(170.0)
                         .show_ui(ui, |ui| {
@@ -792,7 +798,7 @@ impl NythConfigApp {
                 ui.horizontal(|ui| {
                     ui.label("Key:");
                     let current_key_name = hid_key_name(btn.key);
-                    egui::ComboBox::from_id_source("shortcut_key")
+                    egui::ComboBox::from_id_salt("shortcut_key")
                         .selected_text(current_key_name)
                         .width(180.0)
                         .show_ui(ui, |ui| {
@@ -938,7 +944,7 @@ impl NythConfigApp {
         let max_apps = roccat_nyth_profile::config::MAX_APPS_PER_PROFILE;
 
         // ── Main scroll area (scrolls through all 5 profile panels) ──
-        egui::ScrollArea::vertical().id_source("autoswitch_main_scroll").show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("autoswitch_main_scroll").show(ui, |ui| {
             for profile_idx in 0..NYTH_PROFILE_NUM {
                 let is_default = self.state.autoswitch.default_profile == Some(profile_idx);
 
@@ -962,7 +968,7 @@ impl NythConfigApp {
                     // ── Scrollable app list (each profile panel scrolls independently) ──
                     let scroll_id = format!("autoswitch_profile_{}", profile_idx);
                     egui::ScrollArea::vertical()
-                        .id_source(&scroll_id)
+                        .id_salt(&scroll_id)
                         .max_height(200.0)
                         .show(ui, |ui| {
                             let apps = self.state.autoswitch.apps_for_profile(profile_idx).to_vec();
@@ -970,6 +976,10 @@ impl NythConfigApp {
 
                             // Show each app slot as a row.
                             let mut to_remove: Option<usize> = None;
+                            // The loop domain is the fixed slot grid (0..max_apps),
+                            // not `apps` itself: slots past `apps.len()` render as
+                            // empty rows, so indexing here is intentional.
+                            #[allow(clippy::needless_range_loop)]
                             for slot in 0..max_apps {
                                 ui.horizontal(|ui| {
                                     if slot < current_count {
