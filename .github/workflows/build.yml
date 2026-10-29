@@ -48,22 +48,11 @@ jobs:
       - name: Build (all crates)
         run: cargo build --release --all --locked
 
-      - name: Run tests (non-GUI crates)
-        run: |
-          cargo test --release --locked \
-            -p roccat-nyth-hid \
-            -p roccat-nyth-profile \
-            -p nythctl \
-            -p nythd
+      - name: Run tests
+        run: cargo test --release --locked --workspace
 
-      - name: Clippy (non-GUI crates)
-        run: |
-          cargo clippy --release --locked \
-            -p roccat-nyth-hid \
-            -p roccat-nyth-profile \
-            -p nythctl \
-            -p nythd \
-            -- -D warnings
+      - name: Clippy
+        run: cargo clippy --release --locked --workspace --all-targets -- -D warnings
 
   audit:
     # Dependabot PRs get a read-only token that cannot write check
