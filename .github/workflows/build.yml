@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, master]
 
+# Default: read-only token; jobs opt in to more below.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -62,7 +66,14 @@ jobs:
             -- -D warnings
 
   audit:
+    # Dependabot PRs get a read-only token that cannot write check
+    # annotations; advisories introduced by a bump are still caught by the
+    # audit run on the resulting push to main.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v5
 
