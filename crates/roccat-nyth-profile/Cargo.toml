@@ -2,6 +2,7 @@
 name = "roccat-nyth-profile"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "NewNyth's high-level profile, button, and macro management for the Roccat Nyth mouse"
 

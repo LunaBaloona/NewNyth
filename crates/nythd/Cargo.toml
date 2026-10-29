@@ -2,6 +2,7 @@
 name = "nythd"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "NewNyths event daemon for the Roccat Nyth mouse"
 

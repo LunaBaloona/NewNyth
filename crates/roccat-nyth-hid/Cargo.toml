@@ -2,6 +2,7 @@
 name = "roccat-nyth-hid"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "NewNyth's low-level HID communication and protocol structs for the Roccat Nyth mouse"
 
