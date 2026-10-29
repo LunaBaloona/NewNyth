@@ -1,4 +1,4 @@
-//! NewNyth egui application — v0.7.1
+//! NewNyth egui application
 
 use eframe::egui;
 
@@ -232,7 +232,11 @@ impl eframe::App for NythConfigApp {
                 ui.selectable_value(&mut self.section, Section::AutoSwitch, "🔄 Auto-switch");
 
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                    ui.label(egui::RichText::new("NewNyth v0.7.1").small().weak());
+                    ui.label(
+                        egui::RichText::new(format!("NewNyth v{}", env!("CARGO_PKG_VERSION")))
+                            .small()
+                            .weak(),
+                    );
                 });
             });
 

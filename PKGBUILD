@@ -1,7 +1,7 @@
 # Maintainer: NewNyth Contributors
 # https://github.com/LunaBaloona/NewNyth
 pkgname=newnyth
-pkgver=0.7.1
+pkgver=0.7.2
 pkgrel=1
 pkgdesc="NewNyth — Linux driver, daemon, CLI and GUI for the Roccat Nyth mouse"
 arch=('x86_64')
