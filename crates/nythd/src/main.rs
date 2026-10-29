@@ -13,6 +13,7 @@ mod dbus_service;
 mod events;
 mod window_watcher;
 
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -69,6 +70,20 @@ fn main() {
         env!("CARGO_PKG_VERSION")
     );
 
+    // Refuse to start a second instance. Every nythd process opens the
+    // mouse's hidraw nodes, and Linux delivers each HID report to *every*
+    // open reader — two daemons means every button press fires its action
+    // twice (twice for media keys, doubled launches, etc.).
+    let _instance_lock = match acquire_instance_lock(
+        &roccat_nyth_profile::config::config_dir().join("nythd.lock"),
+    ) {
+        Ok(lock_file) => lock_file,
+        Err(e) => {
+            log::error!("{}", e);
+            std::process::exit(1);
+        }
+    };
+
     // Set up signal handler for graceful shutdown.
     let running = Arc::new(AtomicBool::new(true));
     let r = Arc::clone(&running);
@@ -103,6 +118,58 @@ fn main() {
     }
 
     log::info!("nythd stopped");
+}
+
+/// Acquire an exclusive non-blocking flock on the given lock file.
+///
+/// Returns the open file, which **must be held for the process lifetime** —
+/// the lock is released automatically when the file is dropped or the
+/// process exits (even on a crash, so no stale locks).
+///
+/// Fails with a human-readable message if another instance already holds
+/// the lock.
+fn acquire_instance_lock(lock_path: &Path) -> Result<std::fs::File, String> {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create config dir {}: {}", parent.display(), e))?;
+    }
+
+    let file = OpenOptions::new()
+        .create(true)
+        // Do NOT truncate on open — that would clobber the lock file
+        // contents while another instance still holds the lock. The PID
+        // is written below only after we win the lock.
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .map_err(|e| format!("Could not open lock file {}: {}", lock_path.display(), e))?;
+
+    // Non-blocking exclusive advisory lock (released automatically when the
+    // file is closed, so a crashed instance cannot leave a stale lock).
+    let rc = unsafe {
+        use std::os::unix::io::AsRawFd;
+        nix::libc::flock(file.as_raw_fd(), nix::libc::LOCK_EX | nix::libc::LOCK_NB)
+    };
+    if rc != 0 {
+        return Err(format!(
+            "Another nythd instance is already running (lock held via {}; \
+             running duplicate daemons makes every button press fire twice) — \
+             find it with 'pgrep -af nythd', stop it (e.g. 'systemctl --user stop nythd' \
+             or 'pkill -x nythd') before starting another",
+            lock_path.display()
+        ));
+    }
+
+    // Record our PID for diagnostics (best-effort).
+    if file.set_len(0).is_ok() {
+        let _ = (&file).write_all(format!("{}\n", std::process::id()).as_bytes());
+    }
+
+    Ok(file)
 }
 
 /// Run a single device session: find device, enable driver mode, read events.
@@ -471,5 +538,33 @@ extern "C" fn handle_signal(_sig: i32) {
     if ptr != 0 {
         let running = unsafe { &*(ptr as *const AtomicBool) };
         running.store(false, Ordering::SeqCst);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::acquire_instance_lock;
+
+    #[test]
+    fn instance_lock_rejects_second_holder() {
+        // Unique path per test process so parallel tests don't collide.
+        let path = std::env::temp_dir().join(format!(
+            "newnyth-instance-lock-test-{}.lock",
+            std::process::id()
+        ));
+
+        let first = acquire_instance_lock(&path).expect("first lock should succeed");
+        assert!(
+            acquire_instance_lock(&path).is_err(),
+            "second lock must fail while the first is held"
+        );
+
+        // Lock must be released when the holder's file is dropped.
+        drop(first);
+        let again =
+            acquire_instance_lock(&path).expect("lock should be reacquirable after holder drop");
+        drop(again);
+
+        let _ = std::fs::remove_file(&path);
     }
 }
