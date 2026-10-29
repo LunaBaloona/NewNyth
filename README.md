@@ -239,7 +239,7 @@ cargo clippy
 cargo fmt --all
 ```
 
-The binaries will be at `target/release/`. Minimum Rust version: **1.88** (required by `image 0.25`).
+The binaries will be at `target/release/`. Minimum Rust version: **1.95** (required by `eframe 0.37`).
 
 ### Contributing
 

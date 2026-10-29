@@ -51,7 +51,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "newnyth-mini",
         options,
-        Box::new(|_cc| Box::new(MiniApp::new())),
+        Box::new(|_cc| Ok(Box::new(MiniApp::new()))),
     )
 }
 
@@ -99,8 +99,8 @@ impl MiniApp {
 }
 
 impl eframe::App for MiniApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.label(egui::RichText::new("NewNyth Mini").strong().size(16.0));
                 ui.add_space(8.0);
