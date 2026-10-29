@@ -36,17 +36,17 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
 
       - name: Check formatting
         run: cargo fmt --all --check
 
       - name: Build (all crates)
-        run: cargo build --release --all
+        run: cargo build --release --all --locked
 
       - name: Run tests (non-GUI crates)
         run: |
-          cargo test --release \
+          cargo test --release --locked \
             -p roccat-nyth-hid \
             -p roccat-nyth-profile \
             -p nythctl \
@@ -54,9 +54,19 @@ jobs:
 
       - name: Clippy (non-GUI crates)
         run: |
-          cargo clippy --release \
+          cargo clippy --release --locked \
             -p roccat-nyth-hid \
             -p roccat-nyth-profile \
             -p nythctl \
             -p nythd \
             -- -D warnings
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Security audit (RustSec advisories)
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
