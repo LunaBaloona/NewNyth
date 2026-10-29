@@ -29,7 +29,7 @@ sudo install -Dm644 udev/90-roccat-nyth.rules /etc/udev/rules.d/90-roccat-nyth.r
 # Create group
 echo "Setting up roccat group..."
 sudo groupadd -f roccat
-if ! groups "$USER" | grep -q roccat; then
+if ! id -nG "$USER" | grep -qw roccat; then
     sudo usermod -aG roccat "$USER"
     echo "  Added $USER to roccat group (log out and back in to take effect)"
 fi
@@ -53,7 +53,7 @@ systemctl --user daemon-reload
 
 # Install desktop entry
 # NB include remove old RustyNyth entry and icon for NewNyth
-echo "Installing desktop entry..."
+echo "Installing desktop entries..."
 sudo install -Dm644 /dev/stdin /usr/share/applications/newnyth.desktop <<EOF
 [Desktop Entry]
 Name=NewNyth
@@ -64,6 +64,18 @@ Terminal=false
 Type=Application
 Categories=Settings;HardwareSettings;
 Keywords=mouse;roccat;nyth;gaming;
+EOF
+
+sudo install -Dm644 /dev/stdin /usr/share/applications/newnyth-mini.desktop <<EOF
+[Desktop Entry]
+Name=NewNyth Mini
+Comment=Quick profile switcher for the Roccat Nyth mouse
+Exec=newnyth-mini
+Icon=newnyth
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+Keywords=mouse;roccat;nyth;gaming;profile;
 EOF
 
 echo ""
