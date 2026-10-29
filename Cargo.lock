@@ -2312,7 +2312,7 @@ dependencies = [
 
 [[package]]
 name = "nyth-config"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "dbus",
  "eframe",
@@ -2325,7 +2325,7 @@ dependencies = [
 
 [[package]]
 name = "nyth-mini"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "eframe",
  "env_logger",
@@ -2337,7 +2337,7 @@ dependencies = [
 
 [[package]]
 name = "nythctl"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "clap",
  "dbus",
@@ -2349,7 +2349,7 @@ dependencies = [
 
 [[package]]
 name = "nythd"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "bytemuck",
  "dbus",
@@ -2883,7 +2883,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "roccat-nyth-hid"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "bytemuck",
  "log",
@@ -2893,7 +2893,7 @@ dependencies = [
 
 [[package]]
 name = "roccat-nyth-profile"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "bytemuck",
  "log",
