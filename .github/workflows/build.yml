@@ -70,3 +70,7 @@ jobs:
         uses: rustsec/audit-check@v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # webbrowser 0.8.15 comes in via egui-winit 0.27 (eframe 0.27) and
+          # cannot be bumped independently. Remove this ignore when eframe is
+          # updated to >= 0.36 (Phase 2).
+          ignore: RUSTSEC-2026-0257
