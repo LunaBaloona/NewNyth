@@ -29,7 +29,7 @@ sha256sums=()
 
 build() {
     cd "$startdir"
-    cargo build --release --locked 2>/dev/null || cargo build --release
+    cargo build --release --locked
 }
 
 check() {
