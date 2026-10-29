@@ -54,7 +54,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "newnyth",
         options,
-        Box::new(|cc| Box::new(app::NythConfigApp::new(cc))),
+        Box::new(|cc| Ok(Box::new(app::NythConfigApp::new(cc)))),
     )
 }
 

@@ -10,10 +10,10 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.2"
+version = "0.8.0"
 edition = "2021"
 # image 0.25 requires 1.88; clap 4.6 requires 1.85.
-rust-version = "1.88"
+rust-version = "1.95"
 license = "GPL-2.0-or-later"
 authors = [
     "NewNyth Contributors",
@@ -33,7 +33,11 @@ dbus = "0.9"
 dbus-crossroads = "0.5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-eframe = "0.27"
+eframe = "0.37"
+# Only here to enable egui's monochrome emoji fallback fonts, which the UI
+# relies on for its text-glyph icons (⚙💡🖱🔄 …): they became opt-in after
+# eframe 0.30, and eframe does not re-export the feature.
+egui = { version = "0.37", features = ["monochrome_emoji_fonts"] }
 
 [profile.release]
 lto = "thin"
