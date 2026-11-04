@@ -702,6 +702,53 @@ impl NythConfigApp {
         }
     }
 
+    /// Flat top-down Nyth silhouette with the light zones tinted, Swarm's
+    /// illumination-preview style: no artwork, no gradients — the logo
+    /// dot and underglow ring carry the current zone colours and read
+    /// dark while the lighting is off.
+    fn mouse_preview(ui: &mut egui::Ui, settings: &ProfileSettings) {
+        let on = (settings.lights_enabled & 0x03) == 3;
+        let zone = |i: usize| {
+            if on {
+                let l = &settings.lights[i];
+                egui::Color32::from_rgb(l.red, l.green, l.blue)
+            } else {
+                egui::Color32::from_gray(45)
+            }
+        };
+        let body = ui.visuals().widgets.inactive.bg_fill;
+        let edge = ui.visuals().widgets.noninteractive.bg_stroke;
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(150.0, 230.0), egui::Sense::hover());
+        let painter = ui.painter();
+        let c = rect.center();
+        // Shell: a tall ellipse, front pointing up.
+        let radii = egui::vec2(58.0, 96.0);
+        painter.add(egui::Shape::ellipse_filled(c, radii, body));
+        painter.add(egui::Shape::ellipse_stroke(c, radii, edge));
+        // Left/right button split, ending where the wheel starts.
+        painter.line_segment(
+            [
+                egui::pos2(c.x, c.y - radii.y + 8.0),
+                egui::pos2(c.x, c.y - radii.y * 0.46),
+            ],
+            edge,
+        );
+        // Scroll wheel.
+        let wheel = egui::Rect::from_center_size(
+            egui::pos2(c.x, c.y - radii.y * 0.26),
+            egui::vec2(9.0, 24.0),
+        );
+        painter.rect_filled(wheel.round(), 4.0, egui::Color32::from_gray(90));
+        // Logo light (zone 0).
+        painter.circle_filled(egui::pos2(c.x, c.y + radii.y * 0.08), 9.0, zone(0));
+        // Bottom (underglow) ring (zone 1), seated in the shell's lower half.
+        painter.add(egui::Shape::ellipse_stroke(
+            egui::pos2(c.x, c.y + radii.y * 0.55),
+            egui::vec2(34.0, 24.0),
+            egui::Stroke::new(7.0, zone(1)),
+        ));
+    }
+
     // ─── Lighting panel ──────────────────────────────────────
 
     fn ui_lighting(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -726,6 +773,18 @@ impl NythConfigApp {
             };
             self.settings_dirty = true;
         }
+
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Preview", |ui| {
+            ui.vertical_centered(|ui| {
+                Self::mouse_preview(ui, settings);
+                ui.label(
+                    egui::RichText::new("Logo and bottom ring show the current zone colours.")
+                        .small()
+                        .weak(),
+                );
+            });
+        });
 
         if !enabled {
             ui.label(egui::RichText::new("Lighting is turned off.").weak());
