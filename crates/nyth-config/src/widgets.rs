@@ -189,19 +189,24 @@ impl egui::Widget for SegmentedSlider<'_> {
         let seg_off = ui.visuals().widgets.inactive.bg_fill;
         let seg_stroke = ui.visuals().widgets.noninteractive.bg_stroke;
 
-        // Snap segment edges to physical pixels before painting: the
-        // rasteriser's own rounding of fractional rects made the gaps
-        // between segments look uneven.
+        // Place segment edges on whole physical pixels with a Bresenham
+        // split: the gaps are exact whole pixels (fractional gaps round
+        // alternately up and down, which read as uneven spacing), and
+        // the per-segment width variation of one pixel lands on the
+        // boxes instead, where it is invisible.
         let ppf = ui.ctx().pixels_per_point();
-        let snap = |x: f32| (x * ppf).round() / ppf;
-        let seg_w = ((rail.width() - (segs as f32 - 1.0) * GAP).max(1.0)) / segs as f32;
+        let rail_x0 = rail.min.x * ppf;
+        let w_px = rail.width() * ppf;
+        let segs_f = segs as f32;
+        let gap_px = (GAP * ppf).round().max(1.0);
+        let body_px = (w_px - (segs_f - 1.0) * gap_px).max(segs_f);
         for i in 0..segs {
-            let x0 = rail.min.x + i as f32 * (seg_w + GAP);
-            let seg = egui::Rect::from_min_max(
-                egui::pos2(snap(x0), rail.min.y),
-                egui::pos2(snap(x0 + seg_w), rail.max.y),
-            );
-            let filled = (i as f32 + 0.5) / segs as f32 <= ratio + f32::EPSILON;
+            let i = i as f32;
+            let x0 = (rail_x0 + ((i * body_px / segs_f).floor() + i * gap_px)) / ppf;
+            let x1 = (rail_x0 + (((i + 1.0) * body_px / segs_f).floor() + i * gap_px)) / ppf;
+            let seg =
+                egui::Rect::from_min_max(egui::pos2(x0, rail.min.y), egui::pos2(x1, rail.max.y));
+            let filled = (i + 0.5) / segs_f <= ratio + f32::EPSILON;
             let mut fill = if filled { seg_on } else { seg_off };
             if !enabled {
                 fill = fill.linear_multiply(0.5);

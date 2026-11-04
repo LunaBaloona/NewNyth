@@ -729,67 +729,6 @@ impl NythConfigApp {
         }
     }
 
-    /// Flat top-down Nyth silhouette with the light zones tinted, Swarm's
-    /// illumination-preview style: no artwork, no gradients — the logo
-    /// dot and underglow ring carry the current zone colours and read
-    /// dark while the lighting is off. The shell is the union of two
-    /// ellipses — a narrower front lobe and a wider, rounder rear —
-    /// which is much closer to the Nyth's plan form than a plain
-    /// ellipse; a real illustration (or a photo cut-out, user-supplied)
-    /// replaces it as soon as the art lands.
-    fn mouse_preview(ui: &mut egui::Ui, settings: &ProfileSettings) {
-        let on = (settings.lights_enabled & 0x03) == 3;
-        let zone = |i: usize| {
-            if on {
-                let l = &settings.lights[i];
-                egui::Color32::from_rgb(l.red, l.green, l.blue)
-            } else {
-                egui::Color32::from_gray(45)
-            }
-        };
-        let body = ui.visuals().widgets.inactive.bg_fill;
-        let edge = ui.visuals().widgets.noninteractive.bg_stroke;
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(150.0, 230.0), egui::Sense::hover());
-        let painter = ui.painter();
-        let c = rect.center();
-
-        // Shell lobes: front (top, narrower) and rear (wider, rounder).
-        let front = (egui::pos2(c.x, c.y - 34.0), egui::vec2(43.0, 54.0));
-        let rear = (egui::pos2(c.x, c.y + 27.0), egui::vec2(59.0, 66.0));
-        // Outline first: each lobe drawn a few px larger in the edge
-        // colour, then the plain lobes on top in the body colour — the
-        // union reads as one seamless silhouette with a hairline rim.
-        for (center, r) in [front, rear] {
-            painter.add(egui::Shape::ellipse_filled(
-                center,
-                r + egui::vec2(1.6, 1.6),
-                edge.color,
-            ));
-        }
-        for (center, r) in [front, rear] {
-            painter.add(egui::Shape::ellipse_filled(center, r, body));
-        }
-
-        // Left/right button split across the front lobe, ending where
-        // the wheel starts.
-        painter.line_segment(
-            [egui::pos2(c.x, c.y - 82.0), egui::pos2(c.x, c.y - 56.0)],
-            edge,
-        );
-        // Scroll wheel.
-        let wheel =
-            egui::Rect::from_center_size(egui::pos2(c.x, c.y - 44.0), egui::vec2(9.0, 24.0));
-        painter.rect_filled(wheel.round(), 4.0, egui::Color32::from_gray(90));
-        // Logo light (zone 0), where the two lobes meet.
-        painter.circle_filled(egui::pos2(c.x, c.y + 2.0), 9.0, zone(0));
-        // Bottom (underglow) ring (zone 1), seated in the rear lobe.
-        painter.add(egui::Shape::ellipse_stroke(
-            egui::pos2(c.x, c.y + 44.0),
-            egui::vec2(36.0, 26.0),
-            egui::Stroke::new(7.0, zone(1)),
-        ));
-    }
-
     // ─── Lighting panel ──────────────────────────────────────
 
     fn ui_lighting(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -815,28 +754,29 @@ impl NythConfigApp {
             self.settings_dirty = true;
         }
 
-        ui.add_space(8.0);
-        crate::theme::card(ui, "Preview", |ui| {
-            ui.vertical_centered(|ui| {
-                Self::mouse_preview(ui, settings);
-                ui.label(
-                    egui::RichText::new("Logo and bottom ring show the current zone colours.")
-                        .small()
-                        .weak(),
-                );
-            });
-        });
-
         if !enabled {
             ui.label(egui::RichText::new("Lighting is turned off.").weak());
         } else {
             ui.add_space(8.0);
             crate::theme::card(ui, "Colours", |ui| {
+                // Roomier text and fatter swatches take up the space the
+                // (removed) preview card used to fill — the colour well
+                // sizes itself from `interact_size`. `style_mut` is
+                // clone-on-write: it applies to this card's `Ui` and its
+                // children, not to the sibling cards.
+                let style = ui.style_mut();
+                style
+                    .text_styles
+                    .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+                style
+                    .text_styles
+                    .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
+                style.spacing.interact_size = egui::vec2(26.0, 26.0);
                 ui.vertical_centered(|ui| {
                     for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
-                        crate::theme::centered_row(ui, 380.0, |ui| {
+                        crate::theme::centered_row(ui, 460.0, |ui| {
                             ui.add_sized(
-                                [62.0, 20.0],
+                                [72.0, 26.0],
                                 egui::Label::new(format!("{zone}:")).halign(egui::Align::Max),
                             );
                             let l = &mut settings.lights[i];
@@ -852,7 +792,7 @@ impl NythConfigApp {
                                 self.settings_dirty = true;
                             }
                             ui.add_sized(
-                                [82.0, 20.0],
+                                [98.0, 26.0],
                                 egui::Label::new(format!(
                                     "#{:02x}{:02x}{:02x}",
                                     l.red, l.green, l.blue

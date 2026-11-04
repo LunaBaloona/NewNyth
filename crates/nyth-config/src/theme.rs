@@ -28,6 +28,12 @@ const CONTROL_HOVER: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x40, 0x46);
 /// Hairline borders between surfaces.
 const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
 const TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe8, 0xe8);
+/// Normal-state interactive colour — button/combo text, check marks
+/// and the resting scrollbar handle (egui paints the handle with
+/// `widgets.*.fg_stroke` when the bar uses foreground colours). Full
+/// TEXT brightness made the solid scrollbar glare, so interactive
+/// chrome sits a notch dimmer; plain labels stay at TEXT.
+const INTERACTIVE: egui::Color32 = egui::Color32::from_rgb(0xbf, 0xbf, 0xbf);
 /// Section-card header strip: lighter than the card body so the title band
 /// stands out (the Swarm boxes have tinted, centred headings).
 const HEADER: egui::Color32 = egui::Color32::from_rgb(0x26, 0x2a, 0x2f);
@@ -82,7 +88,7 @@ fn apply_colors(ctx: &egui::Context) {
     v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, EDGE);
 
     v.widgets.inactive.bg_fill = CONTROL;
-    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, TEXT);
+    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, INTERACTIVE);
     v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, EDGE);
 
     // Hover/active lean on the accent blue: the plain-grey tint egui
@@ -106,7 +112,7 @@ fn apply_colors(ctx: &egui::Context) {
     style.spacing.scroll = egui::style::ScrollStyle {
         floating: false,
         foreground_color: true,
-        bar_width: 14.0,
+        bar_width: 10.5,
         handle_min_length: 40.0,
         ..Default::default()
     };
