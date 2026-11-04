@@ -88,6 +88,13 @@ impl DeviceState {
         nyth.write_active_profile(index).map_err(|e| e.to_string())
     }
 
+    /// Read just the active-profile byte. Polled at ~1 Hz so the profile
+    /// indicator follows external changes (e.g. the daemon's auto-switch).
+    pub fn read_active_profile(&self) -> Result<u8, String> {
+        let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
+        nyth.read_active_profile().map_err(|e| e.to_string())
+    }
+
     pub fn apply_profile_settings(
         &self,
         index: u8,

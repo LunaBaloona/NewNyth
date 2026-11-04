@@ -31,6 +31,8 @@ pub struct NythConfigApp {
     autoswitch_dirty: bool,
     /// When capturing: (profile_index, slot_index) to assign the next captured app to.
     capturing_for: Option<(u8, usize)>,
+    /// Last time the active-profile byte was re-read (indicator refresh poll).
+    last_profile_poll: std::time::Instant,
 }
 
 impl NythConfigApp {
@@ -56,6 +58,7 @@ impl NythConfigApp {
             opener_edit_buf: String::new(),
             autoswitch_dirty: false,
             capturing_for: None,
+            last_profile_poll: std::time::Instant::now(),
         }
     }
 
@@ -140,6 +143,21 @@ impl NythConfigApp {
             Err(e) => self.set_status(format!("Error: {}", e), ctx),
         }
     }
+
+    /// Re-read the active-profile byte so the sidebar indicator follows
+    /// changes made elsewhere — the daemon's auto-switch flips the profile
+    /// on the device, and without this the GUI would keep highlighting
+    /// whichever profile was active when it started. Throttled to 1 Hz.
+    fn poll_active_profile(&mut self) {
+        if self.last_profile_poll.elapsed() < std::time::Duration::from_secs(1) {
+            return;
+        }
+        self.last_profile_poll = std::time::Instant::now();
+        match self.state.read_active_profile() {
+            Ok(profile) => self.state.active_profile = profile,
+            Err(e) => log::debug!("Active-profile poll failed: {e}"),
+        }
+    }
 }
 
 // ─── Main update loop ──────────────────────────────────────────────
@@ -149,6 +167,14 @@ impl eframe::App for NythConfigApp {
         // Panels below need `ui` mutably, so grab a cheap context handle up
         // front (Context is an Arc internally; cloning is cheap).
         let ctx = ui.ctx().clone();
+
+        // Follow external profile changes (daemon auto-switch): refresh the
+        // sidebar indicator at 1 Hz. The read is throttled internally, the
+        // repaint request just keeps the app waking up at that rate.
+        if self.state.connected {
+            self.poll_active_profile();
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
 
         // ── Left side panel ────────────────────────────
         egui::Panel::left("device_panel")
