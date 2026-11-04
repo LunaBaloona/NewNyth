@@ -36,7 +36,9 @@ pub struct NythConfigApp {
 }
 
 impl NythConfigApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        crate::theme::apply(&cc.egui_ctx);
+
         let state = DeviceState::load_from_device();
         let selected = state.active_profile;
         let profile = state
@@ -193,53 +195,90 @@ impl eframe::App for NythConfigApp {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));
         }
 
-        // ── Left side panel ────────────────────────────
-        egui::Panel::left("device_panel")
-            .min_size(180.0)
-            .max_size(210.0)
-            .show(ui, |ui| {
-                ui.heading("NewNyth");
+        // ── Header: branding, device info, refresh ─────
+        egui::Panel::top("header").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading(egui::RichText::new("NEWNYTH").strong());
                 ui.separator();
-
                 if self.state.connected {
                     ui.label(&self.state.device_name);
-                    ui.label(format!("Firmware: {}", self.state.firmware));
+                    ui.label(format!("Firmware {}", self.state.firmware));
                     ui.label(egui::RichText::new(&self.state.hidraw_path).small().weak());
-                    ui.add_space(12.0);
+                } else {
+                    ui.colored_label(egui::Color32::from_rgb(200, 80, 80), "No device found");
+                    if let Some(ref msg) = self.state.error_message {
+                        ui.label(egui::RichText::new(msg).small().weak());
+                    }
+                }
 
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                            .small()
+                            .weak(),
+                    );
+                    ui.separator();
+                    if ui.button("↻ Refresh").clicked() {
+                        self.reload_device(&ctx);
+                    }
+                });
+            });
+        });
+
+        // ── Tab strip ──────────────────────────────────
+        egui::Panel::top("tabs").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for (section, label) in [
+                    (Section::Settings, "SETTINGS"),
+                    (Section::Buttons, "BUTTON ASSIGNMENT"),
+                    (Section::Lighting, "LIGHTING"),
+                    (Section::AutoSwitch, "AUTO-SWITCH"),
+                ] {
+                    if ui
+                        .selectable_label(
+                            self.section == section,
+                            egui::RichText::new(label).strong(),
+                        )
+                        .clicked()
+                    {
+                        self.section = section;
+                    }
+                }
+            });
+        });
+
+        // ── Bottom profile bar (the Swarm "game profiles" strip) ──
+        egui::Panel::bottom("profile_bar").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if self.state.connected {
                     ui.label(egui::RichText::new("Profile").strong());
-                    ui.add_space(4.0);
 
                     let prev = self.selected_profile;
-                    ui.horizontal_wrapped(|ui| {
-                        for i in 0..NYTH_PROFILE_NUM {
-                            let btn = if i == self.selected_profile {
-                                egui::Button::new(
-                                    egui::RichText::new(format!("{}", i + 1)).strong(),
-                                )
+                    for i in 0..NYTH_PROFILE_NUM {
+                        let btn = if i == self.selected_profile {
+                            egui::Button::new(egui::RichText::new(format!("{}", i + 1)).strong())
                                 .fill(ui.visuals().selection.bg_fill)
-                            } else {
-                                egui::Button::new(format!("{}", i + 1))
-                            };
-                            let r = ui.add_sized([30.0, 26.0], btn);
-                            if r.clicked() {
-                                self.selected_profile = i;
-                            }
-                            if i == self.state.active_profile {
-                                ui.painter().line_segment(
-                                    [r.rect.left_bottom(), r.rect.right_bottom()],
-                                    ui.visuals().widgets.active.fg_stroke,
-                                );
-                            }
+                        } else {
+                            egui::Button::new(format!("{}", i + 1))
+                        };
+                        let r = ui.add_sized([30.0, 26.0], btn);
+                        if r.clicked() {
+                            self.selected_profile = i;
                         }
-                    });
+                        if i == self.state.active_profile {
+                            ui.painter().line_segment(
+                                [r.rect.left_bottom(), r.rect.right_bottom()],
+                                ui.visuals().widgets.active.fg_stroke,
+                            );
+                        }
+                    }
 
                     if prev != self.selected_profile {
                         self.load_pending_from_profile();
                     }
 
-                    ui.add_space(4.0);
-                    ui.checkbox(&mut self.auto_apply_profile, "Auto-activate on click");
+                    ui.separator();
+                    ui.checkbox(&mut self.auto_apply_profile, "Auto-apply");
 
                     if self.auto_apply_profile
                         && prev != self.selected_profile
@@ -257,42 +296,20 @@ impl eframe::App for NythConfigApp {
                         self.activate_profile_on_device(idx, &ctx);
                     }
                 } else {
-                    ui.colored_label(egui::Color32::from_rgb(200, 80, 80), "No device found");
-                    if let Some(ref msg) = self.state.error_message {
-                        ui.label(egui::RichText::new(msg).small().weak());
-                    }
-                }
-
-                ui.add_space(16.0);
-                if ui.button("↻ Refresh").clicked() {
-                    self.reload_device(&ctx);
-                }
-
-                ui.add_space(16.0);
-                ui.separator();
-                ui.label(egui::RichText::new("View").strong());
-                ui.add_space(4.0);
-                ui.selectable_value(&mut self.section, Section::Settings, "⚙ Settings");
-                ui.selectable_value(&mut self.section, Section::Lighting, "💡 Lighting");
-                ui.selectable_value(&mut self.section, Section::Buttons, "🖱 Buttons");
-                ui.selectable_value(&mut self.section, Section::AutoSwitch, "🔄 Auto-switch");
-
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                    ui.label(
-                        egui::RichText::new(format!("NewNyth v{}", env!("CARGO_PKG_VERSION")))
-                            .small()
-                            .weak(),
+                    ui.colored_label(
+                        egui::Color32::from_rgb(200, 80, 80),
+                        "Plug in the Roccat Nyth to configure profiles.",
                     );
-                });
-            });
-
-        egui::Panel::bottom("status_bar").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if let Some((ref msg, ts)) = self.status_message {
-                    if ui.input(|i| i.time) - ts < 5.0 {
-                        ui.label(egui::RichText::new(msg).weak().italics());
-                    }
                 }
+
+                // Transient status messages, right-aligned.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if let Some((ref msg, ts)) = self.status_message {
+                        if ui.input(|i| i.time) - ts < 5.0 {
+                            ui.label(egui::RichText::new(msg).weak().italics());
+                        }
+                    }
+                });
             });
         });
 
