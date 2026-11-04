@@ -5,13 +5,14 @@
 //! reproduction. Gradients/photoreal shading are deliberately out of scope —
 //! egui does flat colors well and that reads as "Swarm-like" already.
 //!
-//! The Play font (OFL-1.1, bundled in `assets/fonts/`, license alongside)
-//! approximates Swarm's condensed technical sans; Ubuntu is the fallback.
+//! The Ubuntu font (Ubuntu Font Licence 1.0, bundled in `assets/fonts/`,
+//! license alongside) gives the UI a softer, rounder read than egui's
+//! default; it is also the family the original Swarm era loved on Linux.
 
 use eframe::egui;
 
-const PLAY_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Play-Regular.ttf");
-const PLAY_BOLD: &[u8] = include_bytes!("../../../assets/fonts/Play-Bold.ttf");
+const UBUNTU_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Ubuntu-Regular.ttf");
+const UBUNTU_BOLD: &[u8] = include_bytes!("../../../assets/fonts/Ubuntu-Bold.ttf");
 
 /// Swarm's cyan highlight, used for selections, accents and focus strokes.
 pub const ACCENT: egui::Color32 = egui::Color32::from_rgb(0x4d, 0xb8, 0xe8);
@@ -38,19 +39,19 @@ pub fn apply(ctx: &egui::Context) {
 fn load_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert(
-        "play".to_owned(),
-        egui::FontData::from_static(PLAY_REGULAR).into(),
+        "ubuntu".to_owned(),
+        egui::FontData::from_static(UBUNTU_REGULAR).into(),
     );
     fonts.font_data.insert(
-        "play_bold".to_owned(),
-        egui::FontData::from_static(PLAY_BOLD).into(),
+        "ubuntu_bold".to_owned(),
+        egui::FontData::from_static(UBUNTU_BOLD).into(),
     );
     let proportional = fonts
         .families
         .entry(egui::FontFamily::Proportional)
         .or_default();
-    proportional.insert(0, "play".to_owned());
-    proportional.insert(1, "play_bold".to_owned());
+    proportional.insert(0, "ubuntu".to_owned());
+    proportional.insert(1, "ubuntu_bold".to_owned());
     // Monospace (paths, key names) stays on egui's built-in Hack.
     ctx.set_fonts(fonts);
 }
