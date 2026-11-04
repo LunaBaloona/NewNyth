@@ -111,9 +111,18 @@ impl eframe::App for MiniApp {
                         *self = MiniApp::new();
                     }
                 } else {
-                    // Profile buttons.
-                    ui.horizontal(|ui| {
-                        ui.add_space((ui.available_width() - (5.0 * 34.0 + 4.0 * 4.0)) / 2.0);
+                    // Profile buttons, centered. Allocate a fixed-size row
+                    // exactly wide enough for the 5 buttons; the enclosing
+                    // vertical_centered layout then centres it horizontally.
+                    // (The previous manual add_space() hack assumed 4px item
+                    // spacing while the theme ships ~8px, and eframe 0.37
+                    // layout made the resulting skew visible.)
+                    let row_width =
+                        NYTH_PROFILE_NUM as f32 * 34.0 + (NYTH_PROFILE_NUM as f32 - 1.0) * 4.0;
+                    let row_layout = egui::Layout::left_to_right(egui::Align::Center)
+                        .with_cross_align(egui::Align::Center);
+                    ui.allocate_ui_with_layout(egui::vec2(row_width, 28.0), row_layout, |ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
                         for i in 0..NYTH_PROFILE_NUM {
                             let is_active = i == self.active_profile;
                             let btn = if is_active {
