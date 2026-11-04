@@ -389,10 +389,10 @@ impl NythConfigApp {
 
         // Single stacked column, contents centred (Swarm keeps Settings
         // narrow and vertical rather than spreading over two columns).
-        crate::theme::card(ui, "CPI levels", |ui| {
+        crate::theme::card(ui, "DPI switcher", |ui| {
             ui.vertical_centered(|ui| {
                 for i in 0..NYTH_CPI_LEVELS_NUM {
-                    crate::theme::centered_row(ui, 430.0, |ui| {
+                    crate::theme::centered_row_sized(ui, 540.0, 34.0, |ui| {
                         let mut en = settings.cpi_levels_enabled & (1 << i) != 0;
                         if ui.checkbox(&mut en, "").changed() {
                             if en {
@@ -412,18 +412,24 @@ impl NythConfigApp {
                             [88.0, 20.0],
                             egui::Label::new(label).halign(egui::Align::Max),
                         );
-                        if ui
-                            .add(
-                                egui::Slider::new(
-                                    &mut cpi,
-                                    NYTH_CPI_MIN as f32..=NYTH_CPI_MAX as f32,
-                                )
-                                .step_by(NYTH_CPI_STEP as f64)
-                                .suffix(" DPI")
-                                .clamping(egui::SliderClamping::Always),
-                            )
-                            .changed()
-                        {
+                        // Swarm's DPI switcher: chunky segmented rail with
+                        // preset ticks and a value box; disabled levels
+                        // stay grey even though they keep their value.
+                        let slider = crate::widgets::SegmentedSlider::new(
+                            &mut cpi,
+                            NYTH_CPI_MIN as f32..=NYTH_CPI_MAX as f32,
+                        )
+                        .step(NYTH_CPI_STEP as f32)
+                        .width(300.0)
+                        .dimmed(!en)
+                        .value_box(0)
+                        .tick(200.0, "200")
+                        .tick(2000.0, "2000")
+                        .tick(4000.0, "4000")
+                        .tick(6000.0, "6000")
+                        .tick(8200.0, "8200")
+                        .tick(12000.0, "12000");
+                        if ui.add(slider).changed() {
                             settings.set_cpi_level(i, cpi as u16);
                             self.settings_dirty = true;
                         }
@@ -473,6 +479,39 @@ impl NythConfigApp {
         ui.add_space(8.0);
         crate::theme::card(ui, "Sensitivity", |ui| {
             ui.vertical_centered(|ui| {
+                // Swarm shows sensitivity as −5…+5 around a neutral 0;
+                // the device stores 1…11 (6 = neutral), a straight −6 shift.
+                let mut sx = settings.sensitivity_x as f32 - 6.0;
+                crate::theme::centered_row_sized(ui, 500.0, 34.0, |ui| {
+                    let mut slider =
+                        crate::widgets::SegmentedSlider::new(&mut sx, -5.0..=5.0).width(300.0);
+                    for t in -5..=5 {
+                        slider = slider.tick(t as f32, t.to_string());
+                    }
+                    if ui.add(slider.value_box(0)).changed() {
+                        let v = (sx + 6.0).round() as u8;
+                        settings.sensitivity_x = v;
+                        if settings.advanced_sensitivity == 0 {
+                            settings.sensitivity_y = v;
+                        }
+                        self.settings_dirty = true;
+                    }
+                });
+                if settings.advanced_sensitivity != 0 {
+                    let mut sy = settings.sensitivity_y as f32 - 6.0;
+                    crate::theme::centered_row_sized(ui, 500.0, 34.0, |ui| {
+                        let mut slider =
+                            crate::widgets::SegmentedSlider::new(&mut sy, -5.0..=5.0).width(300.0);
+                        for t in -5..=5 {
+                            slider = slider.tick(t as f32, t.to_string());
+                        }
+                        if ui.add(slider.value_box(0)).changed() {
+                            settings.sensitivity_y = (sy + 6.0).round() as u8;
+                            self.settings_dirty = true;
+                        }
+                    });
+                }
+                ui.add_space(4.0);
                 let mut adv = settings.advanced_sensitivity != 0;
                 if ui.checkbox(&mut adv, "Independent X / Y").changed() {
                     settings.advanced_sensitivity = if adv { 1 } else { 0 };
@@ -480,31 +519,6 @@ impl NythConfigApp {
                         settings.sensitivity_y = settings.sensitivity_x;
                     }
                     self.settings_dirty = true;
-                }
-                let mut sx = settings.sensitivity_x as f32;
-                crate::theme::centered_row(ui, 400.0, |ui| {
-                    if ui
-                        .add(egui::Slider::new(&mut sx, 1.0..=11.0).text("X sensitivity"))
-                        .changed()
-                    {
-                        settings.sensitivity_x = sx as u8;
-                        if !adv {
-                            settings.sensitivity_y = sx as u8;
-                        }
-                        self.settings_dirty = true;
-                    }
-                });
-                if adv {
-                    let mut sy = settings.sensitivity_y as f32;
-                    crate::theme::centered_row(ui, 400.0, |ui| {
-                        if ui
-                            .add(egui::Slider::new(&mut sy, 1.0..=11.0).text("Y sensitivity"))
-                            .changed()
-                        {
-                            settings.sensitivity_y = sy as u8;
-                            self.settings_dirty = true;
-                        }
-                    });
                 }
             });
         });
