@@ -392,7 +392,7 @@ impl NythConfigApp {
         crate::theme::card(ui, "CPI levels", |ui| {
             ui.vertical_centered(|ui| {
                 for i in 0..NYTH_CPI_LEVELS_NUM {
-                    ui.horizontal(|ui| {
+                    crate::theme::centered_row(ui, 430.0, |ui| {
                         let mut en = settings.cpi_levels_enabled & (1 << i) != 0;
                         if ui.checkbox(&mut en, "").changed() {
                             if en {
@@ -408,7 +408,10 @@ impl NythConfigApp {
                         } else {
                             format!("Level {}", i + 1)
                         };
-                        ui.label(label);
+                        ui.add_sized(
+                            [88.0, 20.0],
+                            egui::Label::new(label).halign(egui::Align::Max),
+                        );
                         if ui
                             .add(
                                 egui::Slider::new(
@@ -427,7 +430,7 @@ impl NythConfigApp {
                     });
                 }
                 ui.add_space(4.0);
-                ui.horizontal(|ui| {
+                crate::theme::centered_row(ui, 320.0, |ui| {
                     ui.label("Active level:");
                     for i in 0..NYTH_CPI_LEVELS_NUM {
                         if ui
@@ -449,7 +452,7 @@ impl NythConfigApp {
         ui.add_space(8.0);
         crate::theme::card(ui, "Polling rate", |ui| {
             ui.vertical_centered(|ui| {
-                ui.horizontal(|ui| {
+                crate::theme::centered_row(ui, 320.0, |ui| {
                     for (v, l) in [
                         (1u8, "125 Hz"),
                         (2, "250 Hz"),
@@ -479,25 +482,29 @@ impl NythConfigApp {
                     self.settings_dirty = true;
                 }
                 let mut sx = settings.sensitivity_x as f32;
-                if ui
-                    .add(egui::Slider::new(&mut sx, 1.0..=11.0).text("X sensitivity"))
-                    .changed()
-                {
-                    settings.sensitivity_x = sx as u8;
-                    if !adv {
-                        settings.sensitivity_y = sx as u8;
-                    }
-                    self.settings_dirty = true;
-                }
-                if adv {
-                    let mut sy = settings.sensitivity_y as f32;
+                crate::theme::centered_row(ui, 400.0, |ui| {
                     if ui
-                        .add(egui::Slider::new(&mut sy, 1.0..=11.0).text("Y sensitivity"))
+                        .add(egui::Slider::new(&mut sx, 1.0..=11.0).text("X sensitivity"))
                         .changed()
                     {
-                        settings.sensitivity_y = sy as u8;
+                        settings.sensitivity_x = sx as u8;
+                        if !adv {
+                            settings.sensitivity_y = sx as u8;
+                        }
                         self.settings_dirty = true;
                     }
+                });
+                if adv {
+                    let mut sy = settings.sensitivity_y as f32;
+                    crate::theme::centered_row(ui, 400.0, |ui| {
+                        if ui
+                            .add(egui::Slider::new(&mut sy, 1.0..=11.0).text("Y sensitivity"))
+                            .changed()
+                        {
+                            settings.sensitivity_y = sy as u8;
+                            self.settings_dirty = true;
+                        }
+                    });
                 }
             });
         });
@@ -538,8 +545,11 @@ impl NythConfigApp {
             crate::theme::card(ui, "Colours", |ui| {
                 ui.vertical_centered(|ui| {
                     for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("{zone}:"));
+                        crate::theme::centered_row(ui, 380.0, |ui| {
+                            ui.add_sized(
+                                [62.0, 20.0],
+                                egui::Label::new(format!("{zone}:")).halign(egui::Align::Max),
+                            );
                             let l = &mut settings.lights[i];
                             let mut c = [
                                 l.red as f32 / 255.0,
@@ -552,7 +562,14 @@ impl NythConfigApp {
                                 l.blue = (c[2] * 255.0) as u8;
                                 self.settings_dirty = true;
                             }
-                            ui.label(format!("#{:02x}{:02x}{:02x}", l.red, l.green, l.blue));
+                            ui.add_sized(
+                                [82.0, 20.0],
+                                egui::Label::new(format!(
+                                    "#{:02x}{:02x}{:02x}",
+                                    l.red, l.green, l.blue
+                                ))
+                                .halign(egui::Align::Min),
+                            );
                             let bit = 4 + i;
                             let mut custom = settings.lights_enabled & (1 << bit) != 0;
                             if ui.checkbox(&mut custom, "Custom colour").changed() {
@@ -570,7 +587,7 @@ impl NythConfigApp {
             ui.add_space(8.0);
             crate::theme::card(ui, "Effects", |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.horizontal(|ui| {
+                    crate::theme::centered_row(ui, 420.0, |ui| {
                         ui.label("Light effect:");
                         for (v, l) in [
                             (1u8, "Fully lit"),
@@ -588,16 +605,18 @@ impl NythConfigApp {
                     });
                     if settings.light_effect > 1 {
                         let mut spd = settings.effect_speed as f32;
-                        if ui
-                            .add(egui::Slider::new(&mut spd, 1.0..=3.0).text("Speed"))
-                            .changed()
-                        {
-                            settings.effect_speed = spd as u8;
-                            self.settings_dirty = true;
-                        }
+                        crate::theme::centered_row(ui, 400.0, |ui| {
+                            if ui
+                                .add(egui::Slider::new(&mut spd, 1.0..=3.0).text("Speed"))
+                                .changed()
+                            {
+                                settings.effect_speed = spd as u8;
+                                self.settings_dirty = true;
+                            }
+                        });
                     }
                     ui.add_space(4.0);
-                    ui.horizontal(|ui| {
+                    crate::theme::centered_row(ui, 430.0, |ui| {
                         ui.label("Colour effect:");
                         for (v, l) in [(0u8, "Off"), (1, "Simultaneously"), (2, "Up"), (3, "Down")]
                         {
