@@ -36,17 +36,17 @@ Note that because I started this for my own use, it's built for use on KDE and W
 
 **Main panel** — CPI levels, polling rate, and sensitivity:.
 
-![Main panel](docs/screenshots/NewNyth_Main.png)
+![Main panel](docs/screenshots/NewNyth_Main_UIv3.png)
 
 
 **Buttons panel** — Map your buttons to various keys and functions:.
 
-![Main panel](docs/screenshots/NewNyth_Mapping.png)
+![Main panel](docs/screenshots/NewNyth_Mapping_UIv3.png)
 
 
 **Profile Auto-switch panel** — Control how we switch profiles depending on the application you're on:.
 
-![Main panel](docs/screenshots/NewNyth_ProfileAutoSwitch.png)
+![Main panel](docs/screenshots/NewNyth_ProfileAutoSwitch_UIv3.png)
 
 
 **NewNyth Mini** — A companion app that simply lets you select a profile. 
