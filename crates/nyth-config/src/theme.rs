@@ -96,6 +96,21 @@ fn apply_colors(ctx: &egui::Context) {
     v.widgets.active.bg_stroke = egui::Stroke::new(1.0, ACCENT);
 
     style.visuals = v;
+
+    // Scrollbars: egui's default "floating" bars fade to an almost
+    // invisible hairline at rest (they only appear properly on hover,
+    // which made whole screens unreachable-looking at small window
+    // sizes). A non-floating bar is laid out solidly and painted at
+    // full opacity; the foreground colour gives the same crisp handle
+    // the floating bar only showed under the mouse.
+    style.spacing.scroll = egui::style::ScrollStyle {
+        floating: false,
+        foreground_color: true,
+        bar_width: 14.0,
+        handle_min_length: 40.0,
+        ..Default::default()
+    };
+
     ctx.set_style_of(egui::Theme::Dark, style);
 }
 
