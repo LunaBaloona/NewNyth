@@ -41,11 +41,9 @@ or the LICENSE file in this distribution.
 
 ---
 
-This program embeds the "Play" font, bundled in `assets/fonts/`:
-    Copyright (c) 2011, Jonas Hecksher, Playtypes, e-types AS
-    (lasse@e-types.com), with Reserved Font Name 'Play', 'Playtype',
-    'Playtype Sans'.
-    https://fonts.google.com/specimen/Play
-    Licensed under the SIL Open Font License, Version 1.1.
+This program embeds the "Ubuntu" font, bundled in `assets/fonts/`:
+    Copyright 2011, 2013, 2016 Canonical Ltd.
+    https://design.ubuntu.com/font/
+    Licensed under the Ubuntu Font Licence, Version 1.0.
     The full license text is included alongside the font files
-    (assets/fonts/OFL.txt).
+    (assets/fonts/UFL.txt).
