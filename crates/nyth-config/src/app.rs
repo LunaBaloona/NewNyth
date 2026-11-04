@@ -387,8 +387,10 @@ impl NythConfigApp {
         ui.heading(format!("Profile {} — Settings", self.selected_profile + 1));
         ui.add_space(8.0);
 
-        ui.columns(2, |cols| {
-            crate::theme::card(&mut cols[0], "CPI levels", |ui| {
+        // Single stacked column, contents centred (Swarm keeps Settings
+        // narrow and vertical rather than spreading over two columns).
+        crate::theme::card(ui, "CPI levels", |ui| {
+            ui.vertical_centered(|ui| {
                 for i in 0..NYTH_CPI_LEVELS_NUM {
                     ui.horizontal(|ui| {
                         let mut en = settings.cpi_levels_enabled & (1 << i) != 0;
@@ -442,8 +444,11 @@ impl NythConfigApp {
                     }
                 });
             });
+        });
 
-            crate::theme::card(&mut cols[1], "Polling rate", |ui| {
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Polling rate", |ui| {
+            ui.vertical_centered(|ui| {
                 ui.horizontal(|ui| {
                     for (v, l) in [
                         (1u8, "125 Hz"),
@@ -460,8 +465,11 @@ impl NythConfigApp {
                     }
                 });
             });
-            cols[1].add_space(8.0);
-            crate::theme::card(&mut cols[1], "Sensitivity", |ui| {
+        });
+
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Sensitivity", |ui| {
+            ui.vertical_centered(|ui| {
                 let mut adv = settings.advanced_sensitivity != 0;
                 if ui.checkbox(&mut adv, "Independent X / Y").changed() {
                     settings.advanced_sensitivity = if adv { 1 } else { 0 };
@@ -528,74 +536,79 @@ impl NythConfigApp {
         } else {
             ui.add_space(8.0);
             crate::theme::card(ui, "Colours", |ui| {
-                for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.label(format!("{zone}:"));
-                        let l = &mut settings.lights[i];
-                        let mut c = [
-                            l.red as f32 / 255.0,
-                            l.green as f32 / 255.0,
-                            l.blue as f32 / 255.0,
-                        ];
-                        if ui.color_edit_button_rgb(&mut c).changed() {
-                            l.red = (c[0] * 255.0) as u8;
-                            l.green = (c[1] * 255.0) as u8;
-                            l.blue = (c[2] * 255.0) as u8;
-                            self.settings_dirty = true;
-                        }
-                        ui.label(format!("#{:02x}{:02x}{:02x}", l.red, l.green, l.blue));
-                        let bit = 4 + i;
-                        let mut custom = settings.lights_enabled & (1 << bit) != 0;
-                        if ui.checkbox(&mut custom, "Custom colour").changed() {
-                            if custom {
-                                settings.lights_enabled |= 1 << bit;
-                            } else {
-                                settings.lights_enabled &= !(1 << bit);
+                ui.vertical_centered(|ui| {
+                    for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("{zone}:"));
+                            let l = &mut settings.lights[i];
+                            let mut c = [
+                                l.red as f32 / 255.0,
+                                l.green as f32 / 255.0,
+                                l.blue as f32 / 255.0,
+                            ];
+                            if ui.color_edit_button_rgb(&mut c).changed() {
+                                l.red = (c[0] * 255.0) as u8;
+                                l.green = (c[1] * 255.0) as u8;
+                                l.blue = (c[2] * 255.0) as u8;
+                                self.settings_dirty = true;
                             }
-                            self.settings_dirty = true;
-                        }
-                    });
-                }
+                            ui.label(format!("#{:02x}{:02x}{:02x}", l.red, l.green, l.blue));
+                            let bit = 4 + i;
+                            let mut custom = settings.lights_enabled & (1 << bit) != 0;
+                            if ui.checkbox(&mut custom, "Custom colour").changed() {
+                                if custom {
+                                    settings.lights_enabled |= 1 << bit;
+                                } else {
+                                    settings.lights_enabled &= !(1 << bit);
+                                }
+                                self.settings_dirty = true;
+                            }
+                        });
+                    }
+                });
             });
             ui.add_space(8.0);
             crate::theme::card(ui, "Effects", |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Light effect:");
-                    for (v, l) in [
-                        (1u8, "Fully lit"),
-                        (2, "Blinking"),
-                        (3, "Breathing"),
-                        (4, "Heartbeat"),
-                    ] {
-                        if ui.selectable_label(settings.light_effect == v, l).clicked()
-                            && settings.light_effect != v
+                ui.vertical_centered(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Light effect:");
+                        for (v, l) in [
+                            (1u8, "Fully lit"),
+                            (2, "Blinking"),
+                            (3, "Breathing"),
+                            (4, "Heartbeat"),
+                        ] {
+                            if ui.selectable_label(settings.light_effect == v, l).clicked()
+                                && settings.light_effect != v
+                            {
+                                settings.light_effect = v;
+                                self.settings_dirty = true;
+                            }
+                        }
+                    });
+                    if settings.light_effect > 1 {
+                        let mut spd = settings.effect_speed as f32;
+                        if ui
+                            .add(egui::Slider::new(&mut spd, 1.0..=3.0).text("Speed"))
+                            .changed()
                         {
-                            settings.light_effect = v;
+                            settings.effect_speed = spd as u8;
                             self.settings_dirty = true;
                         }
                     }
-                });
-                if settings.light_effect > 1 {
-                    let mut spd = settings.effect_speed as f32;
-                    if ui
-                        .add(egui::Slider::new(&mut spd, 1.0..=3.0).text("Speed"))
-                        .changed()
-                    {
-                        settings.effect_speed = spd as u8;
-                        self.settings_dirty = true;
-                    }
-                }
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label("Colour effect:");
-                    for (v, l) in [(0u8, "Off"), (1, "Simultaneously"), (2, "Up"), (3, "Down")] {
-                        if ui.selectable_label(settings.color_effect == v, l).clicked()
-                            && settings.color_effect != v
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.label("Colour effect:");
+                        for (v, l) in [(0u8, "Off"), (1, "Simultaneously"), (2, "Up"), (3, "Down")]
                         {
-                            settings.color_effect = v;
-                            self.settings_dirty = true;
+                            if ui.selectable_label(settings.color_effect == v, l).clicked()
+                                && settings.color_effect != v
+                            {
+                                settings.color_effect = v;
+                                self.settings_dirty = true;
+                            }
                         }
-                    }
+                    });
                 });
             });
         }
