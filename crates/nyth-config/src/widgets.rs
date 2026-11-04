@@ -50,9 +50,6 @@ pub struct SegmentedSlider<'a> {
     ticks: Vec<(f32, String)>,
     value_box: bool,
     decimals: usize,
-    /// Grey the fill out (Swarm dims the sliders of disabled CPI
-    /// levels even though they still carry a value).
-    dimmed: bool,
 }
 
 impl<'a> SegmentedSlider<'a> {
@@ -65,7 +62,6 @@ impl<'a> SegmentedSlider<'a> {
             ticks: Vec::new(),
             value_box: false,
             decimals: 0,
-            dimmed: false,
         }
     }
 
@@ -91,13 +87,6 @@ impl<'a> SegmentedSlider<'a> {
     pub fn value_box(mut self, decimals: usize) -> Self {
         self.value_box = true;
         self.decimals = decimals;
-        self
-    }
-
-    /// Draw the accent fill grey, Swarm-style, while the setting this
-    /// slider edits is disabled.
-    pub fn dimmed(mut self, dimmed: bool) -> Self {
-        self.dimmed = dimmed;
         self
     }
 
@@ -133,7 +122,6 @@ impl egui::Widget for SegmentedSlider<'_> {
             ticks,
             value_box,
             decimals,
-            dimmed,
         } = self;
         let (min, max) = (*range.start(), *range.end());
         let enabled = ui.is_enabled();
@@ -193,22 +181,26 @@ impl egui::Widget for SegmentedSlider<'_> {
         } else {
             0.0
         };
-        let seg_on = if dimmed {
-            ui.visuals().widgets.inactive.bg_fill
-        } else {
-            crate::theme::ACCENT
-        };
+        // Disabled rows (Swarm dims the sliders of unchecked CPI levels)
+        // come through add_enabled_ui: `enabled` is false, everything
+        // below is drawn dark — including the accent fill, which goes to
+        // the dark blue Swarm uses rather than flat grey.
+        let seg_on = crate::theme::ACCENT;
         let seg_off = ui.visuals().widgets.inactive.bg_fill;
         let seg_stroke = ui.visuals().widgets.noninteractive.bg_stroke;
 
+        // Snap segment edges to physical pixels before painting: the
+        // rasteriser's own rounding of fractional rects made the gaps
+        // between segments look uneven.
+        let ppf = ui.ctx().pixels_per_point();
+        let snap = |x: f32| (x * ppf).round() / ppf;
         let seg_w = ((rail.width() - (segs as f32 - 1.0) * GAP).max(1.0)) / segs as f32;
         for i in 0..segs {
             let x0 = rail.min.x + i as f32 * (seg_w + GAP);
             let seg = egui::Rect::from_min_max(
-                egui::pos2(x0, rail.min.y),
-                egui::pos2(x0 + seg_w, rail.max.y),
-            )
-            .round();
+                egui::pos2(snap(x0), rail.min.y),
+                egui::pos2(snap(x0 + seg_w), rail.max.y),
+            );
             let filled = (i as f32 + 0.5) / segs as f32 <= ratio + f32::EPSILON;
             let mut fill = if filled { seg_on } else { seg_off };
             if !enabled {
@@ -243,7 +235,10 @@ impl egui::Widget for SegmentedSlider<'_> {
 
         if !ticks.is_empty() {
             let ty = rect.min.y + RAIL_H + GAP + TICK_H / 2.0;
-            let weak = ui.visuals().weak_text_color();
+            let mut weak = ui.visuals().weak_text_color();
+            if !enabled {
+                weak = weak.linear_multiply(0.55);
+            }
             for (v, label) in &ticks {
                 let t = if max > min {
                     ((v - min) / (max - min)).clamp(0.0, 1.0)
@@ -277,12 +272,16 @@ impl egui::Widget for SegmentedSlider<'_> {
                 seg_stroke,
                 egui::StrokeKind::Inside,
             );
+            let mut box_text = ui.visuals().widgets.inactive.fg_stroke.color;
+            if !enabled {
+                box_text = box_text.linear_multiply(0.55);
+            }
             ui.painter().text(
                 brect.center(),
                 egui::Align2::CENTER_CENTER,
                 format!("{:.*}", decimals, *value),
                 egui::FontId::proportional(13.0),
-                ui.visuals().widgets.inactive.fg_stroke.color,
+                box_text,
             );
         }
 

@@ -363,12 +363,19 @@ impl eframe::App for NythConfigApp {
                 });
                 return;
             }
-            match self.section {
-                Section::Settings => self.ui_settings(ui, &ctx),
-                Section::Buttons => self.ui_buttons(ui, &ctx),
-                Section::Advanced => self.ui_advanced(ui, &ctx),
-                Section::Lighting => self.ui_lighting(ui, &ctx),
-                Section::AutoSwitch => self.ui_autoswitch(ui, &ctx),
+            if matches!(
+                self.section,
+                Section::Settings | Section::Advanced | Section::Lighting
+            ) {
+                // Long single-column card stacks must stay reachable when
+                // the window is short; Buttons and Auto-switch bring their
+                // own scroll areas and must not be wrapped twice.
+                egui::ScrollArea::vertical()
+                    .id_salt("section_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| self.ui_section(ui, &ctx));
+            } else {
+                self.ui_section(ui, &ctx);
             }
         });
     }
@@ -377,6 +384,19 @@ impl eframe::App for NythConfigApp {
 // ─── Settings panel (unchanged from v0.3.0) ────────────────────────
 
 impl NythConfigApp {
+    /// Paint the body of the active tab. Lives outside the `eframe::App`
+    /// impl so both the plain and the scroll-wrapped CentralPanel paths
+    /// can call it.
+    fn ui_section(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        match self.section {
+            Section::Settings => self.ui_settings(ui, ctx),
+            Section::Buttons => self.ui_buttons(ui, ctx),
+            Section::Advanced => self.ui_advanced(ui, ctx),
+            Section::Lighting => self.ui_lighting(ui, ctx),
+            Section::AutoSwitch => self.ui_autoswitch(ui, ctx),
+        }
+    }
+
     fn ui_settings(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let settings = match self.pending_settings.as_mut() {
             Some(s) => s as *mut ProfileSettings,
@@ -411,31 +431,38 @@ impl NythConfigApp {
                         } else {
                             format!("Level {}", i + 1)
                         };
-                        ui.add_sized(
-                            [88.0, 20.0],
-                            egui::Label::new(label).halign(egui::Align::Max),
-                        );
-                        // Swarm's DPI switcher: chunky segmented rail with
-                        // preset ticks and a value box; disabled levels
-                        // stay grey even though they keep their value.
-                        let slider = crate::widgets::SegmentedSlider::new(
-                            &mut cpi,
-                            NYTH_CPI_MIN as f32..=NYTH_CPI_MAX as f32,
-                        )
-                        .step(NYTH_CPI_STEP as f32)
-                        .width(300.0)
-                        .dimmed(!en)
-                        .value_box(0)
-                        .tick(200.0, "200")
-                        .tick(2000.0, "2000")
-                        .tick(4000.0, "4000")
-                        .tick(6000.0, "6000")
-                        .tick(8200.0, "8200")
-                        .tick(12000.0, "12000");
-                        if ui.add(slider).changed() {
-                            settings.set_cpi_level(i, cpi as u16);
-                            self.settings_dirty = true;
-                        }
+                        // Whole row (name, bar, value box) dims while the
+                        // level is unchecked — only the checkbox stays live.
+                        ui.add_enabled_ui(en, |ui| {
+                            let text = if en {
+                                egui::RichText::new(label)
+                            } else {
+                                egui::RichText::new(label).weak()
+                            };
+                            ui.add_sized(
+                                [88.0, 20.0],
+                                egui::Label::new(text).halign(egui::Align::Max),
+                            );
+                            // Swarm's DPI switcher: chunky segmented rail
+                            // with preset ticks and a value box.
+                            let slider = crate::widgets::SegmentedSlider::new(
+                                &mut cpi,
+                                NYTH_CPI_MIN as f32..=NYTH_CPI_MAX as f32,
+                            )
+                            .step(NYTH_CPI_STEP as f32)
+                            .width(300.0)
+                            .value_box(0)
+                            .tick(200.0, "200")
+                            .tick(2000.0, "2000")
+                            .tick(4000.0, "4000")
+                            .tick(6000.0, "6000")
+                            .tick(8200.0, "8200")
+                            .tick(12000.0, "12000");
+                            if ui.add(slider).changed() {
+                                settings.set_cpi_level(i, cpi as u16);
+                                self.settings_dirty = true;
+                            }
+                        });
                     });
                 }
                 ui.add_space(4.0);
@@ -705,7 +732,11 @@ impl NythConfigApp {
     /// Flat top-down Nyth silhouette with the light zones tinted, Swarm's
     /// illumination-preview style: no artwork, no gradients — the logo
     /// dot and underglow ring carry the current zone colours and read
-    /// dark while the lighting is off.
+    /// dark while the lighting is off. The shell is the union of two
+    /// ellipses — a narrower front lobe and a wider, rounder rear —
+    /// which is much closer to the Nyth's plan form than a plain
+    /// ellipse; a real illustration (or a photo cut-out, user-supplied)
+    /// replaces it as soon as the art lands.
     fn mouse_preview(ui: &mut egui::Ui, settings: &ProfileSettings) {
         let on = (settings.lights_enabled & 0x03) == 3;
         let zone = |i: usize| {
@@ -721,30 +752,40 @@ impl NythConfigApp {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(150.0, 230.0), egui::Sense::hover());
         let painter = ui.painter();
         let c = rect.center();
-        // Shell: a tall ellipse, front pointing up.
-        let radii = egui::vec2(58.0, 96.0);
-        painter.add(egui::Shape::ellipse_filled(c, radii, body));
-        painter.add(egui::Shape::ellipse_stroke(c, radii, edge));
-        // Left/right button split, ending where the wheel starts.
+
+        // Shell lobes: front (top, narrower) and rear (wider, rounder).
+        let front = (egui::pos2(c.x, c.y - 34.0), egui::vec2(43.0, 54.0));
+        let rear = (egui::pos2(c.x, c.y + 27.0), egui::vec2(59.0, 66.0));
+        // Outline first: each lobe drawn a few px larger in the edge
+        // colour, then the plain lobes on top in the body colour — the
+        // union reads as one seamless silhouette with a hairline rim.
+        for (center, r) in [front, rear] {
+            painter.add(egui::Shape::ellipse_filled(
+                center,
+                r + egui::vec2(1.6, 1.6),
+                edge.color,
+            ));
+        }
+        for (center, r) in [front, rear] {
+            painter.add(egui::Shape::ellipse_filled(center, r, body));
+        }
+
+        // Left/right button split across the front lobe, ending where
+        // the wheel starts.
         painter.line_segment(
-            [
-                egui::pos2(c.x, c.y - radii.y + 8.0),
-                egui::pos2(c.x, c.y - radii.y * 0.46),
-            ],
+            [egui::pos2(c.x, c.y - 82.0), egui::pos2(c.x, c.y - 56.0)],
             edge,
         );
         // Scroll wheel.
-        let wheel = egui::Rect::from_center_size(
-            egui::pos2(c.x, c.y - radii.y * 0.26),
-            egui::vec2(9.0, 24.0),
-        );
+        let wheel =
+            egui::Rect::from_center_size(egui::pos2(c.x, c.y - 44.0), egui::vec2(9.0, 24.0));
         painter.rect_filled(wheel.round(), 4.0, egui::Color32::from_gray(90));
-        // Logo light (zone 0).
-        painter.circle_filled(egui::pos2(c.x, c.y + radii.y * 0.08), 9.0, zone(0));
-        // Bottom (underglow) ring (zone 1), seated in the shell's lower half.
+        // Logo light (zone 0), where the two lobes meet.
+        painter.circle_filled(egui::pos2(c.x, c.y + 2.0), 9.0, zone(0));
+        // Bottom (underglow) ring (zone 1), seated in the rear lobe.
         painter.add(egui::Shape::ellipse_stroke(
-            egui::pos2(c.x, c.y + radii.y * 0.55),
-            egui::vec2(34.0, 24.0),
+            egui::pos2(c.x, c.y + 44.0),
+            egui::vec2(36.0, 26.0),
             egui::Stroke::new(7.0, zone(1)),
         ));
     }
