@@ -1,0 +1,210 @@
+//! Swarm-inspired visual theme: charcoal surfaces, cyan accents, Play font.
+//!
+//! Colors are sampled roughly from the original Roccat Swarm screenshots
+//! (see `images/` in the workspace); the "family" is the point, not exact
+//! reproduction. Gradients/photoreal shading are deliberately out of scope —
+//! egui does flat colors well and that reads as "Swarm-like" already.
+//!
+//! The Ubuntu font (Ubuntu Font Licence 1.0, bundled in `assets/fonts/`,
+//! license alongside) gives the UI a softer, rounder read than egui's
+//! default; it is also the family the original Swarm era loved on Linux.
+
+use eframe::egui;
+
+const UBUNTU_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Ubuntu-Regular.ttf");
+const UBUNTU_BOLD: &[u8] = include_bytes!("../../../assets/fonts/Ubuntu-Bold.ttf");
+
+/// Swarm's cyan highlight, used for selections, accents and focus strokes.
+pub const ACCENT: egui::Color32 = egui::Color32::from_rgb(0x4d, 0xb8, 0xe8);
+const ACCENT_DIM: egui::Color32 = egui::Color32::from_rgb(0x2e, 0x6f, 0x8e);
+
+/// Panel / card surface (charcoal).
+const SURFACE: egui::Color32 = egui::Color32::from_rgb(0x1b, 0x1d, 0x20);
+/// Deepest background (canvas behind cards, text edit fields).
+const CANVAS: egui::Color32 = egui::Color32::from_rgb(0x12, 0x13, 0x14);
+/// Control backgrounds (buttons, combo boxes).
+const CONTROL: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2e, 0x33);
+const CONTROL_HOVER: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x40, 0x46);
+/// Hairline borders between surfaces.
+const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
+const TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe8, 0xe8);
+/// Section-card header strip: lighter than the card body so the title band
+/// stands out (the Swarm boxes have tinted, centred headings).
+const HEADER: egui::Color32 = egui::Color32::from_rgb(0x26, 0x2a, 0x2f);
+const HEADER_HEIGHT: f32 = 26.0;
+
+/// Apply fonts and colors to the given context. Call once at startup,
+/// before any widgets are drawn.
+pub fn apply(ctx: &egui::Context) {
+    load_fonts(ctx);
+    apply_colors(ctx);
+}
+
+fn load_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert(
+        "ubuntu".to_owned(),
+        egui::FontData::from_static(UBUNTU_REGULAR).into(),
+    );
+    fonts.font_data.insert(
+        "ubuntu_bold".to_owned(),
+        egui::FontData::from_static(UBUNTU_BOLD).into(),
+    );
+    let proportional = fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default();
+    proportional.insert(0, "ubuntu".to_owned());
+    proportional.insert(1, "ubuntu_bold".to_owned());
+    // Monospace (paths, key names) stays on egui's built-in Hack.
+    ctx.set_fonts(fonts);
+}
+
+fn apply_colors(ctx: &egui::Context) {
+    // Swarm is a dark application; don't follow the system preference.
+    ctx.set_theme(egui::ThemePreference::Dark);
+
+    // Keep egui's default spacing/sizes; only restyle colors.
+    let mut style = (*ctx.style_of(egui::Theme::Dark)).clone();
+    let mut v = egui::Visuals::dark();
+
+    v.window_fill = SURFACE;
+    v.panel_fill = SURFACE;
+    v.extreme_bg_color = CANVAS;
+    v.faint_bg_color = CONTROL_HOVER;
+    v.hyperlink_color = ACCENT;
+
+    v.selection.bg_fill = ACCENT.linear_multiply(0.30);
+    v.selection.stroke = egui::Stroke::new(1.0, ACCENT);
+
+    v.widgets.noninteractive.bg_fill = SURFACE;
+    v.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, TEXT);
+    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, EDGE);
+
+    v.widgets.inactive.bg_fill = CONTROL;
+    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, TEXT);
+    v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, EDGE);
+
+    // Hover/active lean on the accent blue: the plain-grey tint egui
+    // defaults to was nearly invisible on slider handles.
+    v.widgets.hovered.bg_fill = CONTROL_HOVER;
+    v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, ACCENT);
+    v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, ACCENT);
+
+    v.widgets.active.bg_fill = ACCENT_DIM;
+    v.widgets.active.fg_stroke = egui::Stroke::new(2.0, ACCENT);
+    v.widgets.active.bg_stroke = egui::Stroke::new(1.0, ACCENT);
+
+    style.visuals = v;
+    ctx.set_style_of(egui::Theme::Dark, style);
+}
+
+// ─── Section cards ─────────────────────────────────────────────────
+
+/// Framed card with a tinted header strip and centred title, Swarm-style.
+///
+/// ```ignore
+/// theme::card(ui, "CPI levels", |ui| { /* body widgets */ });
+/// ```
+pub fn card<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    add_body: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    card_inner(ui, title, None, add_body)
+}
+
+/// Like [`card`], but with extra widgets right-aligned inside the header
+/// strip (e.g. a "Default" checkbox).
+pub fn card_with_actions<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    header_actions: &mut dyn FnMut(&mut egui::Ui),
+    add_body: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    card_inner(ui, title, Some(header_actions), add_body)
+}
+
+fn card_inner<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    mut header_actions: Option<&mut dyn FnMut(&mut egui::Ui)>,
+    add_body: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    egui::Frame::new()
+        .fill(SURFACE)
+        .stroke(egui::Stroke::new(1.0, EDGE))
+        .inner_margin(0.0)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+
+            // ── Header strip (lighter band, centred title) ──
+            let strip = egui::Rect::from_min_size(
+                ui.cursor().min,
+                egui::vec2(ui.available_width(), HEADER_HEIGHT),
+            );
+            ui.allocate_space(strip.size());
+            ui.painter().rect_filled(strip, 0.0, HEADER);
+
+            // Reserve a band on the right when the header carries widgets.
+            let actions_w = if header_actions.is_some() { 150.0 } else { 0.0 };
+            let title_rect = egui::Rect::from_min_max(
+                strip.min,
+                egui::pos2(strip.right() - actions_w, strip.bottom()),
+            );
+            let mut title_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt(("card_header", title))
+                    .max_rect(title_rect)
+                    .layout(egui::Layout::centered_and_justified(
+                        egui::Direction::LeftToRight,
+                    )),
+            );
+            title_ui.add(
+                egui::Label::new(egui::RichText::new(title).strong()).halign(egui::Align::Center),
+            );
+            if let Some(actions) = header_actions.as_mut() {
+                let acts_rect = egui::Rect::from_min_max(
+                    egui::pos2(strip.right() - actions_w, strip.top()),
+                    strip.max,
+                );
+                let mut acts_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .id_salt(("card_actions", title))
+                        .max_rect(acts_rect)
+                        .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                );
+                actions(&mut acts_ui);
+            }
+
+            // ── Body ──
+            egui::Frame::new()
+                .inner_margin(8.0)
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    add_body(ui)
+                })
+                .inner
+        })
+}
+
+/// Horizontal row with a fixed width, centred inside its parent.
+///
+/// Pair with [`egui::Ui::vertical_centered`]: unlike [`egui::Ui::horizontal`]
+/// (which always fills the available width and therefore sits flush left
+/// even in centring layouts), the finite width lets that layout actually
+/// centre the row. Pick a width close to the row's natural size; widgets
+/// that stretch (sliders) will fill whatever is left.
+pub fn centered_row<R>(
+    ui: &mut egui::Ui,
+    width: f32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let width = width.min(ui.available_width());
+    let height = ui.spacing().interact_size.y;
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, height),
+        egui::Layout::left_to_right(egui::Align::Center),
+        add_contents,
+    )
+}

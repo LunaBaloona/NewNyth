@@ -36,7 +36,9 @@ pub struct NythConfigApp {
 }
 
 impl NythConfigApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        crate::theme::apply(&cc.egui_ctx);
+
         let state = DeviceState::load_from_device();
         let selected = state.active_profile;
         let profile = state
@@ -193,53 +195,90 @@ impl eframe::App for NythConfigApp {
             ctx.request_repaint_after(std::time::Duration::from_secs(1));
         }
 
-        // ── Left side panel ────────────────────────────
-        egui::Panel::left("device_panel")
-            .min_size(180.0)
-            .max_size(210.0)
-            .show(ui, |ui| {
-                ui.heading("NewNyth");
+        // ── Header: branding, device info, refresh ─────
+        egui::Panel::top("header").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.heading(egui::RichText::new("NEWNYTH").strong());
                 ui.separator();
-
                 if self.state.connected {
                     ui.label(&self.state.device_name);
-                    ui.label(format!("Firmware: {}", self.state.firmware));
+                    ui.label(format!("Firmware {}", self.state.firmware));
                     ui.label(egui::RichText::new(&self.state.hidraw_path).small().weak());
-                    ui.add_space(12.0);
+                } else {
+                    ui.colored_label(egui::Color32::from_rgb(200, 80, 80), "No device found");
+                    if let Some(ref msg) = self.state.error_message {
+                        ui.label(egui::RichText::new(msg).small().weak());
+                    }
+                }
 
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                            .small()
+                            .weak(),
+                    );
+                    ui.separator();
+                    if ui.button("↻ Refresh").clicked() {
+                        self.reload_device(&ctx);
+                    }
+                });
+            });
+        });
+
+        // ── Tab strip ──────────────────────────────────
+        egui::Panel::top("tabs").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                for (section, label) in [
+                    (Section::Settings, "SETTINGS"),
+                    (Section::Buttons, "BUTTON ASSIGNMENT"),
+                    (Section::Lighting, "LIGHTING"),
+                    (Section::AutoSwitch, "AUTO-SWITCH"),
+                ] {
+                    if ui
+                        .selectable_label(
+                            self.section == section,
+                            egui::RichText::new(label).strong(),
+                        )
+                        .clicked()
+                    {
+                        self.section = section;
+                    }
+                }
+            });
+        });
+
+        // ── Bottom profile bar (the Swarm "game profiles" strip) ──
+        egui::Panel::bottom("profile_bar").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if self.state.connected {
                     ui.label(egui::RichText::new("Profile").strong());
-                    ui.add_space(4.0);
 
                     let prev = self.selected_profile;
-                    ui.horizontal_wrapped(|ui| {
-                        for i in 0..NYTH_PROFILE_NUM {
-                            let btn = if i == self.selected_profile {
-                                egui::Button::new(
-                                    egui::RichText::new(format!("{}", i + 1)).strong(),
-                                )
+                    for i in 0..NYTH_PROFILE_NUM {
+                        let btn = if i == self.selected_profile {
+                            egui::Button::new(egui::RichText::new(format!("{}", i + 1)).strong())
                                 .fill(ui.visuals().selection.bg_fill)
-                            } else {
-                                egui::Button::new(format!("{}", i + 1))
-                            };
-                            let r = ui.add_sized([30.0, 26.0], btn);
-                            if r.clicked() {
-                                self.selected_profile = i;
-                            }
-                            if i == self.state.active_profile {
-                                ui.painter().line_segment(
-                                    [r.rect.left_bottom(), r.rect.right_bottom()],
-                                    ui.visuals().widgets.active.fg_stroke,
-                                );
-                            }
+                        } else {
+                            egui::Button::new(format!("{}", i + 1))
+                        };
+                        let r = ui.add_sized([30.0, 26.0], btn);
+                        if r.clicked() {
+                            self.selected_profile = i;
                         }
-                    });
+                        if i == self.state.active_profile {
+                            ui.painter().line_segment(
+                                [r.rect.left_bottom(), r.rect.right_bottom()],
+                                ui.visuals().widgets.active.fg_stroke,
+                            );
+                        }
+                    }
 
                     if prev != self.selected_profile {
                         self.load_pending_from_profile();
                     }
 
-                    ui.add_space(4.0);
-                    ui.checkbox(&mut self.auto_apply_profile, "Auto-activate on click");
+                    ui.separator();
+                    ui.checkbox(&mut self.auto_apply_profile, "Auto-apply");
 
                     if self.auto_apply_profile
                         && prev != self.selected_profile
@@ -257,42 +296,20 @@ impl eframe::App for NythConfigApp {
                         self.activate_profile_on_device(idx, &ctx);
                     }
                 } else {
-                    ui.colored_label(egui::Color32::from_rgb(200, 80, 80), "No device found");
-                    if let Some(ref msg) = self.state.error_message {
-                        ui.label(egui::RichText::new(msg).small().weak());
-                    }
-                }
-
-                ui.add_space(16.0);
-                if ui.button("↻ Refresh").clicked() {
-                    self.reload_device(&ctx);
-                }
-
-                ui.add_space(16.0);
-                ui.separator();
-                ui.label(egui::RichText::new("View").strong());
-                ui.add_space(4.0);
-                ui.selectable_value(&mut self.section, Section::Settings, "⚙ Settings");
-                ui.selectable_value(&mut self.section, Section::Lighting, "💡 Lighting");
-                ui.selectable_value(&mut self.section, Section::Buttons, "🖱 Buttons");
-                ui.selectable_value(&mut self.section, Section::AutoSwitch, "🔄 Auto-switch");
-
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                    ui.label(
-                        egui::RichText::new(format!("NewNyth v{}", env!("CARGO_PKG_VERSION")))
-                            .small()
-                            .weak(),
+                    ui.colored_label(
+                        egui::Color32::from_rgb(200, 80, 80),
+                        "Plug in the Roccat Nyth to configure profiles.",
                     );
-                });
-            });
-
-        egui::Panel::bottom("status_bar").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if let Some((ref msg, ts)) = self.status_message {
-                    if ui.input(|i| i.time) - ts < 5.0 {
-                        ui.label(egui::RichText::new(msg).weak().italics());
-                    }
                 }
+
+                // Transient status messages, right-aligned.
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if let Some((ref msg, ts)) = self.status_message {
+                        if ui.input(|i| i.time) - ts < 5.0 {
+                            ui.label(egui::RichText::new(msg).weak().italics());
+                        }
+                    }
+                });
             });
         });
 
@@ -370,12 +387,12 @@ impl NythConfigApp {
         ui.heading(format!("Profile {} — Settings", self.selected_profile + 1));
         ui.add_space(8.0);
 
-        ui.columns(2, |cols| {
-            cols[0].group(|ui| {
-                ui.label(egui::RichText::new("CPI levels").strong());
-                ui.add_space(4.0);
+        // Single stacked column, contents centred (Swarm keeps Settings
+        // narrow and vertical rather than spreading over two columns).
+        crate::theme::card(ui, "CPI levels", |ui| {
+            ui.vertical_centered(|ui| {
                 for i in 0..NYTH_CPI_LEVELS_NUM {
-                    ui.horizontal(|ui| {
+                    crate::theme::centered_row(ui, 430.0, |ui| {
                         let mut en = settings.cpi_levels_enabled & (1 << i) != 0;
                         if ui.checkbox(&mut en, "").changed() {
                             if en {
@@ -391,7 +408,10 @@ impl NythConfigApp {
                         } else {
                             format!("Level {}", i + 1)
                         };
-                        ui.label(label);
+                        ui.add_sized(
+                            [88.0, 20.0],
+                            egui::Label::new(label).halign(egui::Align::Max),
+                        );
                         if ui
                             .add(
                                 egui::Slider::new(
@@ -410,7 +430,7 @@ impl NythConfigApp {
                     });
                 }
                 ui.add_space(4.0);
-                ui.horizontal(|ui| {
+                crate::theme::centered_row(ui, 320.0, |ui| {
                     ui.label("Active level:");
                     for i in 0..NYTH_CPI_LEVELS_NUM {
                         if ui
@@ -427,10 +447,12 @@ impl NythConfigApp {
                     }
                 });
             });
+        });
 
-            cols[1].group(|ui| {
-                ui.label(egui::RichText::new("Polling rate").strong());
-                ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Polling rate", |ui| {
+            ui.vertical_centered(|ui| {
+                crate::theme::centered_row(ui, 320.0, |ui| {
                     for (v, l) in [
                         (1u8, "125 Hz"),
                         (2, "250 Hz"),
@@ -446,9 +468,11 @@ impl NythConfigApp {
                     }
                 });
             });
-            cols[1].add_space(8.0);
-            cols[1].group(|ui| {
-                ui.label(egui::RichText::new("Sensitivity").strong());
+        });
+
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Sensitivity", |ui| {
+            ui.vertical_centered(|ui| {
                 let mut adv = settings.advanced_sensitivity != 0;
                 if ui.checkbox(&mut adv, "Independent X / Y").changed() {
                     settings.advanced_sensitivity = if adv { 1 } else { 0 };
@@ -458,25 +482,29 @@ impl NythConfigApp {
                     self.settings_dirty = true;
                 }
                 let mut sx = settings.sensitivity_x as f32;
-                if ui
-                    .add(egui::Slider::new(&mut sx, 1.0..=11.0).text("X sensitivity"))
-                    .changed()
-                {
-                    settings.sensitivity_x = sx as u8;
-                    if !adv {
-                        settings.sensitivity_y = sx as u8;
-                    }
-                    self.settings_dirty = true;
-                }
-                if adv {
-                    let mut sy = settings.sensitivity_y as f32;
+                crate::theme::centered_row(ui, 400.0, |ui| {
                     if ui
-                        .add(egui::Slider::new(&mut sy, 1.0..=11.0).text("Y sensitivity"))
+                        .add(egui::Slider::new(&mut sx, 1.0..=11.0).text("X sensitivity"))
                         .changed()
                     {
-                        settings.sensitivity_y = sy as u8;
+                        settings.sensitivity_x = sx as u8;
+                        if !adv {
+                            settings.sensitivity_y = sx as u8;
+                        }
                         self.settings_dirty = true;
                     }
+                });
+                if adv {
+                    let mut sy = settings.sensitivity_y as f32;
+                    crate::theme::centered_row(ui, 400.0, |ui| {
+                        if ui
+                            .add(egui::Slider::new(&mut sy, 1.0..=11.0).text("Y sensitivity"))
+                            .changed()
+                        {
+                            settings.sensitivity_y = sy as u8;
+                            self.settings_dirty = true;
+                        }
+                    });
                 }
             });
         });
@@ -514,77 +542,92 @@ impl NythConfigApp {
             ui.label(egui::RichText::new("Lighting is turned off.").weak());
         } else {
             ui.add_space(8.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("Colours").strong());
-                for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.label(format!("{zone}:"));
-                        let l = &mut settings.lights[i];
-                        let mut c = [
-                            l.red as f32 / 255.0,
-                            l.green as f32 / 255.0,
-                            l.blue as f32 / 255.0,
-                        ];
-                        if ui.color_edit_button_rgb(&mut c).changed() {
-                            l.red = (c[0] * 255.0) as u8;
-                            l.green = (c[1] * 255.0) as u8;
-                            l.blue = (c[2] * 255.0) as u8;
-                            self.settings_dirty = true;
-                        }
-                        ui.label(format!("#{:02x}{:02x}{:02x}", l.red, l.green, l.blue));
-                        let bit = 4 + i;
-                        let mut custom = settings.lights_enabled & (1 << bit) != 0;
-                        if ui.checkbox(&mut custom, "Custom colour").changed() {
-                            if custom {
-                                settings.lights_enabled |= 1 << bit;
-                            } else {
-                                settings.lights_enabled &= !(1 << bit);
+            crate::theme::card(ui, "Colours", |ui| {
+                ui.vertical_centered(|ui| {
+                    for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
+                        crate::theme::centered_row(ui, 380.0, |ui| {
+                            ui.add_sized(
+                                [62.0, 20.0],
+                                egui::Label::new(format!("{zone}:")).halign(egui::Align::Max),
+                            );
+                            let l = &mut settings.lights[i];
+                            let mut c = [
+                                l.red as f32 / 255.0,
+                                l.green as f32 / 255.0,
+                                l.blue as f32 / 255.0,
+                            ];
+                            if ui.color_edit_button_rgb(&mut c).changed() {
+                                l.red = (c[0] * 255.0) as u8;
+                                l.green = (c[1] * 255.0) as u8;
+                                l.blue = (c[2] * 255.0) as u8;
+                                self.settings_dirty = true;
                             }
-                            self.settings_dirty = true;
-                        }
-                    });
-                }
-            });
-            ui.add_space(8.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("Effects").strong());
-                ui.horizontal(|ui| {
-                    ui.label("Light effect:");
-                    for (v, l) in [
-                        (1u8, "Fully lit"),
-                        (2, "Blinking"),
-                        (3, "Breathing"),
-                        (4, "Heartbeat"),
-                    ] {
-                        if ui.selectable_label(settings.light_effect == v, l).clicked()
-                            && settings.light_effect != v
-                        {
-                            settings.light_effect = v;
-                            self.settings_dirty = true;
-                        }
+                            ui.add_sized(
+                                [82.0, 20.0],
+                                egui::Label::new(format!(
+                                    "#{:02x}{:02x}{:02x}",
+                                    l.red, l.green, l.blue
+                                ))
+                                .halign(egui::Align::Min),
+                            );
+                            let bit = 4 + i;
+                            let mut custom = settings.lights_enabled & (1 << bit) != 0;
+                            if ui.checkbox(&mut custom, "Custom colour").changed() {
+                                if custom {
+                                    settings.lights_enabled |= 1 << bit;
+                                } else {
+                                    settings.lights_enabled &= !(1 << bit);
+                                }
+                                self.settings_dirty = true;
+                            }
+                        });
                     }
                 });
-                if settings.light_effect > 1 {
-                    let mut spd = settings.effect_speed as f32;
-                    if ui
-                        .add(egui::Slider::new(&mut spd, 1.0..=3.0).text("Speed"))
-                        .changed()
-                    {
-                        settings.effect_speed = spd as u8;
-                        self.settings_dirty = true;
-                    }
-                }
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label("Colour effect:");
-                    for (v, l) in [(0u8, "Off"), (1, "Simultaneously"), (2, "Up"), (3, "Down")] {
-                        if ui.selectable_label(settings.color_effect == v, l).clicked()
-                            && settings.color_effect != v
-                        {
-                            settings.color_effect = v;
-                            self.settings_dirty = true;
+            });
+            ui.add_space(8.0);
+            crate::theme::card(ui, "Effects", |ui| {
+                ui.vertical_centered(|ui| {
+                    crate::theme::centered_row(ui, 420.0, |ui| {
+                        ui.label("Light effect:");
+                        for (v, l) in [
+                            (1u8, "Fully lit"),
+                            (2, "Blinking"),
+                            (3, "Breathing"),
+                            (4, "Heartbeat"),
+                        ] {
+                            if ui.selectable_label(settings.light_effect == v, l).clicked()
+                                && settings.light_effect != v
+                            {
+                                settings.light_effect = v;
+                                self.settings_dirty = true;
+                            }
                         }
+                    });
+                    if settings.light_effect > 1 {
+                        let mut spd = settings.effect_speed as f32;
+                        crate::theme::centered_row(ui, 400.0, |ui| {
+                            if ui
+                                .add(egui::Slider::new(&mut spd, 1.0..=3.0).text("Speed"))
+                                .changed()
+                            {
+                                settings.effect_speed = spd as u8;
+                                self.settings_dirty = true;
+                            }
+                        });
                     }
+                    ui.add_space(4.0);
+                    crate::theme::centered_row(ui, 430.0, |ui| {
+                        ui.label("Colour effect:");
+                        for (v, l) in [(0u8, "Off"), (1, "Simultaneously"), (2, "Up"), (3, "Down")]
+                        {
+                            if ui.selectable_label(settings.color_effect == v, l).clicked()
+                                && settings.color_effect != v
+                            {
+                                settings.color_effect = v;
+                                self.settings_dirty = true;
+                            }
+                        }
+                    });
                 });
             });
         }
@@ -619,31 +662,34 @@ impl NythConfigApp {
         egui::ScrollArea::vertical()
             .max_height(ui.available_height() - 120.0)
             .show(ui, |ui| {
-                ui.columns(2, |cols| {
-                    // ── Left column: Standard layer ─────
-                    cols[0].group(|ui| {
-                        ui.label(egui::RichText::new("Standard — Main buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
-                    });
-                    cols[0].add_space(6.0);
-                    cols[0].group(|ui| {
-                        ui.label(egui::RichText::new("Standard — Side buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
-                    });
+                // Centre the quadrant block. When the mouse illustration lands
+                // (v0.9.2) it will take the side space this frees up.
+                let avail_w = ui.available_width();
+                let block_w = avail_w.min(1000.0);
+                let pad = ((avail_w - block_w) / 2.0).max(0.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(pad);
+                    ui.vertical(|ui| {
+                        ui.set_width(block_w);
+                        ui.columns(2, |cols| {
+                            // ── Left column: Standard layer ─────
+                            crate::theme::card(&mut cols[0], "Standard — Main buttons", |ui| {
+                                self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
+                            });
+                            cols[0].add_space(6.0);
+                            crate::theme::card(&mut cols[0], "Standard — Side buttons", |ui| {
+                                self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
+                            });
 
-                    // ── Right column: EasyShift layer ───
-                    cols[1].group(|ui| {
-                        ui.label(egui::RichText::new("EasyShift — Main buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
-                    });
-                    cols[1].add_space(6.0);
-                    cols[1].group(|ui| {
-                        ui.label(egui::RichText::new("EasyShift — Side buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
+                            // ── Right column: EasyShift layer ───
+                            crate::theme::card(&mut cols[1], "EasyShift — Main buttons", |ui| {
+                                self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
+                            });
+                            cols[1].add_space(6.0);
+                            crate::theme::card(&mut cols[1], "EasyShift — Side buttons", |ui| {
+                                self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
+                            });
+                        });
                     });
                 });
             });
@@ -991,110 +1037,151 @@ impl NythConfigApp {
             ui.add_space(4.0);
         }
 
+        // ── Profile cards, wrapping into width-responsive columns ──
+        // One card per profile; the column count is recomputed from the
+        // available width every frame, so resizing the window reflows the
+        // layout (Swarm crams the profiles into a table; we keep cards).
         let max_apps = roccat_nyth_profile::config::MAX_APPS_PER_PROFILE;
+        let min_card_w = 340.0;
+        let gap = ui.spacing().item_spacing.x;
+        let avail_w = ui.available_width();
+        let num_cols = (((avail_w + gap) / (min_card_w + gap)).floor() as usize)
+            .clamp(1, NYTH_PROFILE_NUM as usize);
+        let per_col = (NYTH_PROFILE_NUM as usize).div_ceil(num_cols);
 
-        // ── Main scroll area (scrolls through all 5 profile panels) ──
-        egui::ScrollArea::vertical().id_salt("autoswitch_main_scroll").show(ui, |ui| {
-            for profile_idx in 0..NYTH_PROFILE_NUM {
-                let is_default = self.state.autoswitch.default_profile == Some(profile_idx);
+        egui::ScrollArea::vertical()
+            .id_salt("autoswitch_main_scroll")
+            .show(ui, |ui| {
+                ui.columns(num_cols, |cols| {
+                    for (col_idx, col) in cols.iter_mut().enumerate() {
+                        let start = col_idx * per_col;
+                        let end = (start + per_col).min(NYTH_PROFILE_NUM as usize);
+                        for p in start..end {
+                            let profile_idx = p as u8;
+                            let is_default =
+                                self.state.autoswitch.default_profile == Some(profile_idx);
+                            let cap_here =
+                                self.capturing_for.map(|(pp, _)| pp) == Some(profile_idx);
 
-                ui.group(|ui| {
-                    ui.set_min_width(ui.available_width() - 8.0);
+                            // The header's "Default" toggle must not borrow
+                            // `self` (the body closure already does), so it
+                            // parks the desired change for after the card.
+                            let mut new_default: Option<Option<u8>> = None;
 
-                    // ── Header row: title + default checkbox ─────
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(format!("Mouse Profile {}", profile_idx + 1)).strong().size(15.0));
-                        ui.add_space(16.0);
-                        ui.label("Default:");
-                        let mut def = is_default;
-                        if ui.checkbox(&mut def, "").changed() {
-                            self.state.autoswitch.default_profile = if def { Some(profile_idx) } else { None };
-                            self.autoswitch_dirty = true;
-                        }
-                    });
+                            crate::theme::card_with_actions(
+                                col,
+                                &format!("Mouse Profile {}", profile_idx + 1),
+                                &mut |ui| {
+                                    let mut def = is_default;
+                                    if ui
+                                        .checkbox(&mut def, "")
+                                        .on_hover_text(
+                                            "Profile to activate when no listed app is focused",
+                                        )
+                                        .changed()
+                                    {
+                                        new_default =
+                                            Some(if def { Some(profile_idx) } else { None });
+                                    }
+                                    ui.label("Default");
+                                },
+                                |ui| {
+                                    let apps = self
+                                        .state
+                                        .autoswitch
+                                        .apps_for_profile(profile_idx)
+                                        .to_vec();
+                                    let mut to_remove: Option<usize> = None;
 
-                    ui.separator();
+                                    for (slot, app) in apps.iter().enumerate() {
+                                        ui.horizontal(|ui| {
+                                            let name_w =
+                                                (ui.available_width() - 140.0).max(60.0);
+                                            ui.add_sized(
+                                                [name_w, 20.0],
+                                                egui::Label::new(
+                                                    egui::RichText::new(app.as_str()).monospace(),
+                                                )
+                                                .truncate(),
+                                            );
+                                            if self.capturing_for == Some((profile_idx, slot)) {
+                                                ui.label(
+                                                    egui::RichText::new("Waiting…")
+                                                        .weak()
+                                                        .italics(),
+                                                );
+                                            } else if ui
+                                                .button("Capture")
+                                                .on_hover_text(
+                                                    "Assign a newly focused window to this slot",
+                                                )
+                                                .clicked()
+                                            {
+                                                self.capturing_for = Some((profile_idx, slot));
+                                                DeviceState::start_capture();
+                                                self.set_status(
+                                                    format!(
+                                                        "Click a window to replace slot {} in MP {}…",
+                                                        slot + 1,
+                                                        profile_idx + 1
+                                                    ),
+                                                    ctx,
+                                                );
+                                            }
+                                            if ui.button("✕").on_hover_text("Remove").clicked() {
+                                                to_remove = Some(slot);
+                                            }
+                                        });
+                                    }
 
-                    // ── Scrollable app list (each profile panel scrolls independently) ──
-                    let scroll_id = format!("autoswitch_profile_{}", profile_idx);
-                    egui::ScrollArea::vertical()
-                        .id_salt(&scroll_id)
-                        .max_height(200.0)
-                        .show(ui, |ui| {
-                            let apps = self.state.autoswitch.apps_for_profile(profile_idx).to_vec();
-                            let current_count = apps.len();
+                                    if let Some(slot) = to_remove {
+                                        self.state
+                                            .autoswitch
+                                            .apps_for_profile_mut(profile_idx)
+                                            .remove(slot);
+                                        self.autoswitch_dirty = true;
+                                    }
 
-                            // Show each app slot as a row.
-                            let mut to_remove: Option<usize> = None;
-                            // The loop domain is the fixed slot grid (0..max_apps),
-                            // not `apps` itself: slots past `apps.len()` render as
-                            // empty rows, so indexing here is intentional.
-                            #[allow(clippy::needless_range_loop)]
-                            for slot in 0..max_apps {
-                                ui.horizontal(|ui| {
-                                    if slot < current_count {
-                                        // Filled slot: app name + capture + remove.
-                                        let app = &apps[slot];
-                                        ui.add_sized(
-                                            [220.0, 20.0],
-                                            egui::Label::new(egui::RichText::new(app).monospace()),
-                                        );
-
-                                        let is_capturing_this = self.capturing_for == Some((profile_idx, slot));
-                                        if is_capturing_this {
-                                            ui.label(egui::RichText::new("Waiting…").weak().italics());
-                                        } else if ui.button("Capture").clicked() {
+                                    // One compact add row instead of a wall
+                                    // of empty capture slots.
+                                    if apps.len() < max_apps {
+                                        if cap_here {
+                                            ui.label(
+                                                egui::RichText::new(
+                                                    "Waiting for you to click a window…",
+                                                )
+                                                .weak()
+                                                .italics(),
+                                            );
+                                        } else if ui.button("＋ Add application").clicked() {
+                                            let slot = self
+                                                .state
+                                                .autoswitch
+                                                .apps_for_profile(profile_idx)
+                                                .len();
                                             self.capturing_for = Some((profile_idx, slot));
                                             DeviceState::start_capture();
                                             self.set_status(
-                                                format!("Click a window to replace slot {} in MP {}…", slot + 1, profile_idx + 1),
+                                                format!(
+                                                    "Click a window to add it to Mouse Profile {}…",
+                                                    profile_idx + 1
+                                                ),
                                                 ctx,
                                             );
-                                        }
-
-                                        if ui.button("✕").on_hover_text("Remove").clicked() {
-                                            to_remove = Some(slot);
-                                        }
-                                    } else {
-                                        // Empty slot: text field + capture + remove placeholder.
-                                        ui.add_sized(
-                                            [220.0, 20.0],
-                                            egui::Label::new(egui::RichText::new("").weak()),
-                                        );
-
-                                        let is_capturing_this = self.capturing_for == Some((profile_idx, slot));
-                                        if is_capturing_this {
-                                            ui.label(egui::RichText::new("Waiting…").weak().italics());
-                                        } else if ui.button("Capture").clicked() {
-                                            self.capturing_for = Some((profile_idx, slot));
-                                            DeviceState::start_capture();
-                                            self.set_status(
-                                                format!("Click a window to assign to slot {} in MP {}…", slot + 1, profile_idx + 1),
-                                                ctx,
-                                            );
-                                        }
-
-                                        if ui.button("✕").on_hover_text("Remove").clicked() {
-                                            // Nothing to remove in empty slot.
                                         }
                                     }
-                                });
-                            }
+                                },
+                            );
 
-                            // Handle removal.
-                            if let Some(idx) = to_remove {
-                                let apps_mut = self.state.autoswitch.apps_for_profile_mut(profile_idx);
-                                if idx < apps_mut.len() {
-                                    apps_mut.remove(idx);
-                                    self.autoswitch_dirty = true;
-                                }
+                            if let Some(nd) = new_default {
+                                self.state.autoswitch.default_profile = nd;
+                                self.autoswitch_dirty = true;
                             }
-                        });
+                            col.add_space(8.0);
+                        }
+                    }
                 });
-
-                ui.add_space(6.0);
-            }
-        });
+            });
     }
 
     fn ui_autoswitch_save_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
