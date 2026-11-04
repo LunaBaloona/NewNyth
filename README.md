@@ -34,24 +34,29 @@ Note that because I started this for my own use, it's built for use on KDE and W
 
 ## Screenshots
 
-**Main panel** — CPI levels, polling rate, and sensitivity:.
+**Settings panel** — CPI levels, polling rate, and sensitivity.
 
-![Main panel](docs/screenshots/NewNyth_Main_UIv3.png)
-
-
-**Buttons panel** — Map your buttons to various keys and functions:.
-
-![Main panel](docs/screenshots/NewNyth_Mapping_UIv3.png)
+![NewNyth settings panel](docs/screenshots/NewNyth_Main_UIv3.png)
 
 
-**Profile Auto-switch panel** — Control how we switch profiles depending on the application you're on:.
+**Buttons panel** — Map your buttons to various keys and functions.
 
-![Main panel](docs/screenshots/NewNyth_ProfileAutoSwitch_UIv3.png)
+![NewNyth button mapping panel](docs/screenshots/NewNyth_Mapping_UIv3.png)
+
+
+**Lighting panel** — Colours, light effects and colour effects for both light zones.
+
+![NewNyth lighting panel](docs/screenshots/Lighting_UIv3.png)
+
+
+**Profile Auto-switch panel** — Control how we switch profiles depending on the application you're on.
+
+![NewNyth profile auto-switch panel](docs/screenshots/NewNyth_ProfileAutoSwitch_UIv3.png)
 
 
 **NewNyth Mini** — A companion app that simply lets you select a profile. 
 
-![Main panel](docs/screenshots/NewNyth_Mini.png)
+![NewNyth Mini profile switcher](docs/screenshots/NewNyth_Mini.png)
 
 
 ## Installation (Arch Linux)
