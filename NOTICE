@@ -38,3 +38,12 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <https://www.gnu.org/licenses/>
 or the LICENSE file in this distribution.
+
+---
+
+This program embeds the "Ubuntu" font, bundled in `assets/fonts/`:
+    Copyright 2011, 2013, 2016 Canonical Ltd.
+    https://design.ubuntu.com/font/
+    Licensed under the Ubuntu Font Licence, Version 1.0.
+    The full license text is included alongside the font files
+    (assets/fonts/UFL.txt).
