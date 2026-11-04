@@ -31,6 +31,8 @@ pub struct NythConfigApp {
     autoswitch_dirty: bool,
     /// When capturing: (profile_index, slot_index) to assign the next captured app to.
     capturing_for: Option<(u8, usize)>,
+    /// Last time the active-profile byte was re-read (indicator refresh poll).
+    last_profile_poll: std::time::Instant,
 }
 
 impl NythConfigApp {
@@ -56,6 +58,7 @@ impl NythConfigApp {
             opener_edit_buf: String::new(),
             autoswitch_dirty: false,
             capturing_for: None,
+            last_profile_poll: std::time::Instant::now(),
         }
     }
 
@@ -140,6 +143,38 @@ impl NythConfigApp {
             Err(e) => self.set_status(format!("Error: {}", e), ctx),
         }
     }
+
+    /// Re-read the active-profile byte so the sidebar indicator follows
+    /// changes made elsewhere — the daemon's auto-switch flips the profile
+    /// on the device, and without this the GUI would keep highlighting
+    /// whichever profile was active when it started. Throttled to 1 Hz.
+    ///
+    /// When the device moved on by itself, the viewed profile follows it
+    /// (like the mini window), so the coloured highlight tracks the device.
+    /// Unsaved edits in the current view block the follow until they are
+    /// saved or discarded.
+    fn poll_active_profile(&mut self) {
+        if self.last_profile_poll.elapsed() < std::time::Duration::from_secs(1) {
+            return;
+        }
+        self.last_profile_poll = std::time::Instant::now();
+        match self.state.read_active_profile() {
+            Ok(profile) => {
+                if profile == self.state.active_profile {
+                    return;
+                }
+                self.state.active_profile = profile;
+                if !self.settings_dirty && !self.buttons_dirty && self.selected_profile != profile {
+                    self.selected_profile = profile;
+                    // The sidebar's own change detection can no longer
+                    // see the jump (prev is already updated), so load
+                    // the newly viewed profile's data here.
+                    self.load_pending_from_profile();
+                }
+            }
+            Err(e) => log::debug!("Active-profile poll failed: {e}"),
+        }
+    }
 }
 
 // ─── Main update loop ──────────────────────────────────────────────
@@ -149,6 +184,14 @@ impl eframe::App for NythConfigApp {
         // Panels below need `ui` mutably, so grab a cheap context handle up
         // front (Context is an Arc internally; cloning is cheap).
         let ctx = ui.ctx().clone();
+
+        // Follow external profile changes (daemon auto-switch): refresh the
+        // sidebar indicator at 1 Hz. The read is throttled internally, the
+        // repaint request just keeps the app waking up at that rate.
+        if self.state.connected {
+            self.poll_active_profile();
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
 
         // ── Left side panel ────────────────────────────
         egui::Panel::left("device_panel")
@@ -913,10 +956,17 @@ impl NythConfigApp {
             self.autoswitch_dirty = true;
         }
 
+        ui.add_space(8.0);
+
+        // The save bar must be added *before* the profile scroll area below:
+        // a vertical ScrollArea expands to fill all remaining window height,
+        // so anything added after it falls outside the window and can never
+        // be seen or clicked (the bug that made captured apps unsaveable).
+        self.ui_autoswitch_save_bar(ui, ctx);
+
         if !self.state.autoswitch.enabled {
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Auto-switching is disabled.").weak());
-            self.ui_autoswitch_save_bar(ui, ctx);
             return;
         }
 
@@ -1045,9 +1095,6 @@ impl NythConfigApp {
                 ui.add_space(6.0);
             }
         });
-
-        ui.add_space(8.0);
-        self.ui_autoswitch_save_bar(ui, ctx);
     }
 
     fn ui_autoswitch_save_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -1062,9 +1109,19 @@ impl NythConfigApp {
                 match self.state.save_autoswitch() {
                     Ok(()) => {
                         self.autoswitch_dirty = false;
-                        // Tell the daemon to reload config.
-                        DeviceState::notify_daemon_config_changed();
-                        self.set_status("Auto-switch settings saved", ctx);
+                        // Tell the daemon to reload config. If the nudge
+                        // fails the daemon still picks the file up via its
+                        // mtime watch, but say so instead of staying quiet.
+                        match DeviceState::notify_daemon_config_changed() {
+                            Ok(()) => self.set_status("Auto-switch settings saved", ctx),
+                            Err(e) => {
+                                log::warn!("Saved, but could not notify daemon: {}", e);
+                                self.set_status(
+                                    "Saved — daemon unreachable, it will reload the file shortly",
+                                    ctx,
+                                );
+                            }
+                        }
                     }
                     Err(e) => self.set_status(format!("Error saving: {}", e), ctx),
                 }

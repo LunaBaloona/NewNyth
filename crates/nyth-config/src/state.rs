@@ -88,6 +88,13 @@ impl DeviceState {
         nyth.write_active_profile(index).map_err(|e| e.to_string())
     }
 
+    /// Read just the active-profile byte. Polled at ~1 Hz so the profile
+    /// indicator follows external changes (e.g. the daemon's auto-switch).
+    pub fn read_active_profile(&self) -> Result<u8, String> {
+        let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
+        nyth.read_active_profile().map_err(|e| e.to_string())
+    }
+
     pub fn apply_profile_settings(
         &self,
         index: u8,
@@ -125,18 +132,21 @@ impl DeviceState {
     }
 
     /// Tell the daemon to reload its config files.
-    pub fn notify_daemon_config_changed() {
-        let conn = match dbus::blocking::Connection::new_session() {
-            Ok(c) => c,
-            Err(_) => return,
-        };
+    ///
+    /// Returns an error if the session bus or the daemon is unreachable.
+    /// The daemon also polls its config files' mtime, so a failed nudge
+    /// only delays pickup by roughly a second — it never loses the change.
+    pub fn notify_daemon_config_changed() -> Result<(), String> {
+        let conn = dbus::blocking::Connection::new_session()
+            .map_err(|e| format!("no session D-Bus: {}", e))?;
         let proxy = conn.with_proxy(
             "org.roccat.Nyth",
             "/org/roccat/Nyth",
             std::time::Duration::from_millis(500),
         );
-        let _: Result<(), _> =
+        let result: Result<(), _> =
             proxy.method_call("org.roccat.Nyth", "ConfigurationChangedOutside", ());
+        result.map_err(|e| format!("daemon call failed: {}", e))
     }
 
     /// Ask the daemon to capture the next focused window.

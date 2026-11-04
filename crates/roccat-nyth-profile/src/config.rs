@@ -154,3 +154,36 @@ impl AutoSwitchConfig {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn profile_for_app_matches_case_insensitively() {
+        let mut cfg = AutoSwitchConfig::default();
+        cfg.apps_for_profile_mut(1).push("brave-browser".into());
+        assert_eq!(cfg.profile_for_app("brave-browser"), Some(1));
+        assert_eq!(cfg.profile_for_app("Brave-Browser"), Some(1));
+        assert_eq!(cfg.profile_for_app("firefox"), None);
+    }
+
+    #[test]
+    fn json_roundtrip_preserves_bindings() {
+        let mut cfg = AutoSwitchConfig {
+            enabled: true,
+            default_profile: Some(0),
+            ..Default::default()
+        };
+        cfg.apps_for_profile_mut(1).push("brave-browser".into());
+        cfg.apps_for_profile_mut(4).push("org.kde.dolphin".into());
+
+        let json = serde_json::to_string(&cfg).unwrap();
+        let back: AutoSwitchConfig = serde_json::from_str(&json).unwrap();
+
+        assert!(back.enabled);
+        assert_eq!(back.default_profile, Some(0));
+        assert_eq!(back.profile_for_app("brave-browser"), Some(1));
+        assert_eq!(back.profile_for_app("org.kde.dolphin"), Some(4));
+    }
+}

@@ -59,6 +59,7 @@ struct MiniApp {
     active_profile: u8,
     connected: bool,
     status: Option<String>,
+    last_poll: std::time::Instant,
 }
 
 impl MiniApp {
@@ -75,6 +76,7 @@ impl MiniApp {
             active_profile: active,
             connected,
             status: None,
+            last_poll: std::time::Instant::now(),
         }
     }
 
@@ -96,10 +98,39 @@ impl MiniApp {
             }
         }
     }
+
+    /// Re-read the active profile from the device so the highlighted button
+    /// follows the daemon's auto-switch; doubles as a cheap reconnect check.
+    fn refresh_active_profile(&mut self) {
+        match NythDevice::open_first() {
+            Ok(nyth) => {
+                if let Ok(profile) = nyth.read_active_profile() {
+                    self.active_profile = profile;
+                    if !self.connected {
+                        self.connected = true;
+                        self.status = None;
+                    }
+                }
+            }
+            Err(_) => {
+                self.connected = false;
+                self.status = Some("No device".into());
+            }
+        }
+    }
 }
 
 impl eframe::App for MiniApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Wake up at 1 Hz so the highlighted button can follow the daemon's
+        // auto-switches (and unplugging/replugging the device is noticed).
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs(1));
+        if self.last_poll.elapsed() >= std::time::Duration::from_secs(1) {
+            self.last_poll = std::time::Instant::now();
+            self.refresh_active_profile();
+        }
+
         egui::CentralPanel::default().show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 ui.label(egui::RichText::new("NewNyth Mini").strong().size(16.0));
@@ -111,9 +142,18 @@ impl eframe::App for MiniApp {
                         *self = MiniApp::new();
                     }
                 } else {
-                    // Profile buttons.
-                    ui.horizontal(|ui| {
-                        ui.add_space((ui.available_width() - (5.0 * 34.0 + 4.0 * 4.0)) / 2.0);
+                    // Profile buttons, centered. Allocate a fixed-size row
+                    // exactly wide enough for the 5 buttons; the enclosing
+                    // vertical_centered layout then centres it horizontally.
+                    // (The previous manual add_space() hack assumed 4px item
+                    // spacing while the theme ships ~8px, and eframe 0.37
+                    // layout made the resulting skew visible.)
+                    let row_width =
+                        NYTH_PROFILE_NUM as f32 * 34.0 + (NYTH_PROFILE_NUM as f32 - 1.0) * 4.0;
+                    let row_layout = egui::Layout::left_to_right(egui::Align::Center)
+                        .with_cross_align(egui::Align::Center);
+                    ui.allocate_ui_with_layout(egui::vec2(row_width, 28.0), row_layout, |ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
                         for i in 0..NYTH_PROFILE_NUM {
                             let is_active = i == self.active_profile;
                             let btn = if is_active {
