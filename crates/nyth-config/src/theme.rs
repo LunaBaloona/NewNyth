@@ -85,12 +85,14 @@ fn apply_colors(ctx: &egui::Context) {
     v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, TEXT);
     v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, EDGE);
 
+    // Hover/active lean on the accent blue: the plain-grey tint egui
+    // defaults to was nearly invisible on slider handles.
     v.widgets.hovered.bg_fill = CONTROL_HOVER;
-    v.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-    v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, ACCENT_DIM);
+    v.widgets.hovered.fg_stroke = egui::Stroke::new(1.5, ACCENT);
+    v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, ACCENT);
 
     v.widgets.active.bg_fill = ACCENT_DIM;
-    v.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
+    v.widgets.active.fg_stroke = egui::Stroke::new(2.0, ACCENT);
     v.widgets.active.bg_stroke = egui::Stroke::new(1.0, ACCENT);
 
     style.visuals = v;
@@ -184,4 +186,25 @@ fn card_inner<R>(
                 })
                 .inner
         })
+}
+
+/// Horizontal row with a fixed width, centred inside its parent.
+///
+/// Pair with [`egui::Ui::vertical_centered`]: unlike [`egui::Ui::horizontal`]
+/// (which always fills the available width and therefore sits flush left
+/// even in centring layouts), the finite width lets that layout actually
+/// centre the row. Pick a width close to the row's natural size; widgets
+/// that stretch (sliders) will fill whatever is left.
+pub fn centered_row<R>(
+    ui: &mut egui::Ui,
+    width: f32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let width = width.min(ui.available_width());
+    let height = ui.spacing().interact_size.y;
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, height),
+        egui::Layout::left_to_right(egui::Align::Center),
+        add_contents,
+    )
 }
