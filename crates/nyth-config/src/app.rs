@@ -913,10 +913,17 @@ impl NythConfigApp {
             self.autoswitch_dirty = true;
         }
 
+        ui.add_space(8.0);
+
+        // The save bar must be added *before* the profile scroll area below:
+        // a vertical ScrollArea expands to fill all remaining window height,
+        // so anything added after it falls outside the window and can never
+        // be seen or clicked (the bug that made captured apps unsaveable).
+        self.ui_autoswitch_save_bar(ui, ctx);
+
         if !self.state.autoswitch.enabled {
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Auto-switching is disabled.").weak());
-            self.ui_autoswitch_save_bar(ui, ctx);
             return;
         }
 
@@ -1045,9 +1052,6 @@ impl NythConfigApp {
                 ui.add_space(6.0);
             }
         });
-
-        ui.add_space(8.0);
-        self.ui_autoswitch_save_bar(ui, ctx);
     }
 
     fn ui_autoswitch_save_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
@@ -1062,9 +1066,19 @@ impl NythConfigApp {
                 match self.state.save_autoswitch() {
                     Ok(()) => {
                         self.autoswitch_dirty = false;
-                        // Tell the daemon to reload config.
-                        DeviceState::notify_daemon_config_changed();
-                        self.set_status("Auto-switch settings saved", ctx);
+                        // Tell the daemon to reload config. If the nudge
+                        // fails the daemon still picks the file up via its
+                        // mtime watch, but say so instead of staying quiet.
+                        match DeviceState::notify_daemon_config_changed() {
+                            Ok(()) => self.set_status("Auto-switch settings saved", ctx),
+                            Err(e) => {
+                                log::warn!("Saved, but could not notify daemon: {}", e);
+                                self.set_status(
+                                    "Saved — daemon unreachable, it will reload the file shortly",
+                                    ctx,
+                                );
+                            }
+                        }
                     }
                     Err(e) => self.set_status(format!("Error saving: {}", e), ctx),
                 }
