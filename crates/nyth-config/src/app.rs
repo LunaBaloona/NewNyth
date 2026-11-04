@@ -388,9 +388,7 @@ impl NythConfigApp {
         ui.add_space(8.0);
 
         ui.columns(2, |cols| {
-            cols[0].group(|ui| {
-                ui.label(egui::RichText::new("CPI levels").strong());
-                ui.add_space(4.0);
+            crate::theme::card(&mut cols[0], "CPI levels", |ui| {
                 for i in 0..NYTH_CPI_LEVELS_NUM {
                     ui.horizontal(|ui| {
                         let mut en = settings.cpi_levels_enabled & (1 << i) != 0;
@@ -445,8 +443,7 @@ impl NythConfigApp {
                 });
             });
 
-            cols[1].group(|ui| {
-                ui.label(egui::RichText::new("Polling rate").strong());
+            crate::theme::card(&mut cols[1], "Polling rate", |ui| {
                 ui.horizontal(|ui| {
                     for (v, l) in [
                         (1u8, "125 Hz"),
@@ -464,8 +461,7 @@ impl NythConfigApp {
                 });
             });
             cols[1].add_space(8.0);
-            cols[1].group(|ui| {
-                ui.label(egui::RichText::new("Sensitivity").strong());
+            crate::theme::card(&mut cols[1], "Sensitivity", |ui| {
                 let mut adv = settings.advanced_sensitivity != 0;
                 if ui.checkbox(&mut adv, "Independent X / Y").changed() {
                     settings.advanced_sensitivity = if adv { 1 } else { 0 };
@@ -531,8 +527,7 @@ impl NythConfigApp {
             ui.label(egui::RichText::new("Lighting is turned off.").weak());
         } else {
             ui.add_space(8.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("Colours").strong());
+            crate::theme::card(ui, "Colours", |ui| {
                 for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(format!("{zone}:"));
@@ -563,8 +558,7 @@ impl NythConfigApp {
                 }
             });
             ui.add_space(8.0);
-            ui.group(|ui| {
-                ui.label(egui::RichText::new("Effects").strong());
+            crate::theme::card(ui, "Effects", |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Light effect:");
                     for (v, l) in [
@@ -636,31 +630,34 @@ impl NythConfigApp {
         egui::ScrollArea::vertical()
             .max_height(ui.available_height() - 120.0)
             .show(ui, |ui| {
-                ui.columns(2, |cols| {
-                    // ── Left column: Standard layer ─────
-                    cols[0].group(|ui| {
-                        ui.label(egui::RichText::new("Standard — Main buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
-                    });
-                    cols[0].add_space(6.0);
-                    cols[0].group(|ui| {
-                        ui.label(egui::RichText::new("Standard — Side buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
-                    });
+                // Centre the quadrant block. When the mouse illustration lands
+                // (v0.9.2) it will take the side space this frees up.
+                let avail_w = ui.available_width();
+                let block_w = avail_w.min(1000.0);
+                let pad = ((avail_w - block_w) / 2.0).max(0.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(pad);
+                    ui.vertical(|ui| {
+                        ui.set_width(block_w);
+                        ui.columns(2, |cols| {
+                            // ── Left column: Standard layer ─────
+                            crate::theme::card(&mut cols[0], "Standard — Main buttons", |ui| {
+                                self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
+                            });
+                            cols[0].add_space(6.0);
+                            crate::theme::card(&mut cols[0], "Standard — Side buttons", |ui| {
+                                self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
+                            });
 
-                    // ── Right column: EasyShift layer ───
-                    cols[1].group(|ui| {
-                        ui.label(egui::RichText::new("EasyShift — Main buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
-                    });
-                    cols[1].add_space(6.0);
-                    cols[1].group(|ui| {
-                        ui.label(egui::RichText::new("EasyShift — Side buttons").strong());
-                        ui.add_space(2.0);
-                        self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
+                            // ── Right column: EasyShift layer ───
+                            crate::theme::card(&mut cols[1], "EasyShift — Main buttons", |ui| {
+                                self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
+                            });
+                            cols[1].add_space(6.0);
+                            crate::theme::card(&mut cols[1], "EasyShift — Side buttons", |ui| {
+                                self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
+                            });
+                        });
                     });
                 });
             });
@@ -1008,110 +1005,151 @@ impl NythConfigApp {
             ui.add_space(4.0);
         }
 
+        // ── Profile cards, wrapping into width-responsive columns ──
+        // One card per profile; the column count is recomputed from the
+        // available width every frame, so resizing the window reflows the
+        // layout (Swarm crams the profiles into a table; we keep cards).
         let max_apps = roccat_nyth_profile::config::MAX_APPS_PER_PROFILE;
+        let min_card_w = 340.0;
+        let gap = ui.spacing().item_spacing.x;
+        let avail_w = ui.available_width();
+        let num_cols = (((avail_w + gap) / (min_card_w + gap)).floor() as usize)
+            .clamp(1, NYTH_PROFILE_NUM as usize);
+        let per_col = (NYTH_PROFILE_NUM as usize).div_ceil(num_cols);
 
-        // ── Main scroll area (scrolls through all 5 profile panels) ──
-        egui::ScrollArea::vertical().id_salt("autoswitch_main_scroll").show(ui, |ui| {
-            for profile_idx in 0..NYTH_PROFILE_NUM {
-                let is_default = self.state.autoswitch.default_profile == Some(profile_idx);
+        egui::ScrollArea::vertical()
+            .id_salt("autoswitch_main_scroll")
+            .show(ui, |ui| {
+                ui.columns(num_cols, |cols| {
+                    for (col_idx, col) in cols.iter_mut().enumerate() {
+                        let start = col_idx * per_col;
+                        let end = (start + per_col).min(NYTH_PROFILE_NUM as usize);
+                        for p in start..end {
+                            let profile_idx = p as u8;
+                            let is_default =
+                                self.state.autoswitch.default_profile == Some(profile_idx);
+                            let cap_here =
+                                self.capturing_for.map(|(pp, _)| pp) == Some(profile_idx);
 
-                ui.group(|ui| {
-                    ui.set_min_width(ui.available_width() - 8.0);
+                            // The header's "Default" toggle must not borrow
+                            // `self` (the body closure already does), so it
+                            // parks the desired change for after the card.
+                            let mut new_default: Option<Option<u8>> = None;
 
-                    // ── Header row: title + default checkbox ─────
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(format!("Mouse Profile {}", profile_idx + 1)).strong().size(15.0));
-                        ui.add_space(16.0);
-                        ui.label("Default:");
-                        let mut def = is_default;
-                        if ui.checkbox(&mut def, "").changed() {
-                            self.state.autoswitch.default_profile = if def { Some(profile_idx) } else { None };
-                            self.autoswitch_dirty = true;
-                        }
-                    });
+                            crate::theme::card_with_actions(
+                                col,
+                                &format!("Mouse Profile {}", profile_idx + 1),
+                                &mut |ui| {
+                                    let mut def = is_default;
+                                    if ui
+                                        .checkbox(&mut def, "")
+                                        .on_hover_text(
+                                            "Profile to activate when no listed app is focused",
+                                        )
+                                        .changed()
+                                    {
+                                        new_default =
+                                            Some(if def { Some(profile_idx) } else { None });
+                                    }
+                                    ui.label("Default");
+                                },
+                                |ui| {
+                                    let apps = self
+                                        .state
+                                        .autoswitch
+                                        .apps_for_profile(profile_idx)
+                                        .to_vec();
+                                    let mut to_remove: Option<usize> = None;
 
-                    ui.separator();
+                                    for (slot, app) in apps.iter().enumerate() {
+                                        ui.horizontal(|ui| {
+                                            let name_w =
+                                                (ui.available_width() - 140.0).max(60.0);
+                                            ui.add_sized(
+                                                [name_w, 20.0],
+                                                egui::Label::new(
+                                                    egui::RichText::new(app.as_str()).monospace(),
+                                                )
+                                                .truncate(),
+                                            );
+                                            if self.capturing_for == Some((profile_idx, slot)) {
+                                                ui.label(
+                                                    egui::RichText::new("Waiting…")
+                                                        .weak()
+                                                        .italics(),
+                                                );
+                                            } else if ui
+                                                .button("Capture")
+                                                .on_hover_text(
+                                                    "Assign a newly focused window to this slot",
+                                                )
+                                                .clicked()
+                                            {
+                                                self.capturing_for = Some((profile_idx, slot));
+                                                DeviceState::start_capture();
+                                                self.set_status(
+                                                    format!(
+                                                        "Click a window to replace slot {} in MP {}…",
+                                                        slot + 1,
+                                                        profile_idx + 1
+                                                    ),
+                                                    ctx,
+                                                );
+                                            }
+                                            if ui.button("✕").on_hover_text("Remove").clicked() {
+                                                to_remove = Some(slot);
+                                            }
+                                        });
+                                    }
 
-                    // ── Scrollable app list (each profile panel scrolls independently) ──
-                    let scroll_id = format!("autoswitch_profile_{}", profile_idx);
-                    egui::ScrollArea::vertical()
-                        .id_salt(&scroll_id)
-                        .max_height(200.0)
-                        .show(ui, |ui| {
-                            let apps = self.state.autoswitch.apps_for_profile(profile_idx).to_vec();
-                            let current_count = apps.len();
+                                    if let Some(slot) = to_remove {
+                                        self.state
+                                            .autoswitch
+                                            .apps_for_profile_mut(profile_idx)
+                                            .remove(slot);
+                                        self.autoswitch_dirty = true;
+                                    }
 
-                            // Show each app slot as a row.
-                            let mut to_remove: Option<usize> = None;
-                            // The loop domain is the fixed slot grid (0..max_apps),
-                            // not `apps` itself: slots past `apps.len()` render as
-                            // empty rows, so indexing here is intentional.
-                            #[allow(clippy::needless_range_loop)]
-                            for slot in 0..max_apps {
-                                ui.horizontal(|ui| {
-                                    if slot < current_count {
-                                        // Filled slot: app name + capture + remove.
-                                        let app = &apps[slot];
-                                        ui.add_sized(
-                                            [220.0, 20.0],
-                                            egui::Label::new(egui::RichText::new(app).monospace()),
-                                        );
-
-                                        let is_capturing_this = self.capturing_for == Some((profile_idx, slot));
-                                        if is_capturing_this {
-                                            ui.label(egui::RichText::new("Waiting…").weak().italics());
-                                        } else if ui.button("Capture").clicked() {
+                                    // One compact add row instead of a wall
+                                    // of empty capture slots.
+                                    if apps.len() < max_apps {
+                                        if cap_here {
+                                            ui.label(
+                                                egui::RichText::new(
+                                                    "Waiting for you to click a window…",
+                                                )
+                                                .weak()
+                                                .italics(),
+                                            );
+                                        } else if ui.button("＋ Add application").clicked() {
+                                            let slot = self
+                                                .state
+                                                .autoswitch
+                                                .apps_for_profile(profile_idx)
+                                                .len();
                                             self.capturing_for = Some((profile_idx, slot));
                                             DeviceState::start_capture();
                                             self.set_status(
-                                                format!("Click a window to replace slot {} in MP {}…", slot + 1, profile_idx + 1),
+                                                format!(
+                                                    "Click a window to add it to Mouse Profile {}…",
+                                                    profile_idx + 1
+                                                ),
                                                 ctx,
                                             );
-                                        }
-
-                                        if ui.button("✕").on_hover_text("Remove").clicked() {
-                                            to_remove = Some(slot);
-                                        }
-                                    } else {
-                                        // Empty slot: text field + capture + remove placeholder.
-                                        ui.add_sized(
-                                            [220.0, 20.0],
-                                            egui::Label::new(egui::RichText::new("").weak()),
-                                        );
-
-                                        let is_capturing_this = self.capturing_for == Some((profile_idx, slot));
-                                        if is_capturing_this {
-                                            ui.label(egui::RichText::new("Waiting…").weak().italics());
-                                        } else if ui.button("Capture").clicked() {
-                                            self.capturing_for = Some((profile_idx, slot));
-                                            DeviceState::start_capture();
-                                            self.set_status(
-                                                format!("Click a window to assign to slot {} in MP {}…", slot + 1, profile_idx + 1),
-                                                ctx,
-                                            );
-                                        }
-
-                                        if ui.button("✕").on_hover_text("Remove").clicked() {
-                                            // Nothing to remove in empty slot.
                                         }
                                     }
-                                });
-                            }
+                                },
+                            );
 
-                            // Handle removal.
-                            if let Some(idx) = to_remove {
-                                let apps_mut = self.state.autoswitch.apps_for_profile_mut(profile_idx);
-                                if idx < apps_mut.len() {
-                                    apps_mut.remove(idx);
-                                    self.autoswitch_dirty = true;
-                                }
+                            if let Some(nd) = new_default {
+                                self.state.autoswitch.default_profile = nd;
+                                self.autoswitch_dirty = true;
                             }
-                        });
+                            col.add_space(8.0);
+                        }
+                    }
                 });
-
-                ui.add_space(6.0);
-            }
-        });
+            });
     }
 
     fn ui_autoswitch_save_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {

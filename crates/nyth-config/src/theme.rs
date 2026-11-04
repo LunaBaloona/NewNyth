@@ -28,6 +28,10 @@ const CONTROL_HOVER: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x40, 0x46);
 /// Hairline borders between surfaces.
 const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
 const TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe8, 0xe8);
+/// Section-card header strip: lighter than the card body so the title band
+/// stands out (the Swarm boxes have tinted, centred headings).
+const HEADER: egui::Color32 = egui::Color32::from_rgb(0x26, 0x2a, 0x2f);
+const HEADER_HEIGHT: f32 = 26.0;
 
 /// Apply fonts and colors to the given context. Call once at startup,
 /// before any widgets are drawn.
@@ -91,4 +95,93 @@ fn apply_colors(ctx: &egui::Context) {
 
     style.visuals = v;
     ctx.set_style_of(egui::Theme::Dark, style);
+}
+
+// ─── Section cards ─────────────────────────────────────────────────
+
+/// Framed card with a tinted header strip and centred title, Swarm-style.
+///
+/// ```ignore
+/// theme::card(ui, "CPI levels", |ui| { /* body widgets */ });
+/// ```
+pub fn card<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    add_body: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    card_inner(ui, title, None, add_body)
+}
+
+/// Like [`card`], but with extra widgets right-aligned inside the header
+/// strip (e.g. a "Default" checkbox).
+pub fn card_with_actions<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    header_actions: &mut dyn FnMut(&mut egui::Ui),
+    add_body: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    card_inner(ui, title, Some(header_actions), add_body)
+}
+
+fn card_inner<R>(
+    ui: &mut egui::Ui,
+    title: &str,
+    mut header_actions: Option<&mut dyn FnMut(&mut egui::Ui)>,
+    add_body: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    egui::Frame::new()
+        .fill(SURFACE)
+        .stroke(egui::Stroke::new(1.0, EDGE))
+        .inner_margin(0.0)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+
+            // ── Header strip (lighter band, centred title) ──
+            let strip = egui::Rect::from_min_size(
+                ui.cursor().min,
+                egui::vec2(ui.available_width(), HEADER_HEIGHT),
+            );
+            ui.allocate_space(strip.size());
+            ui.painter().rect_filled(strip, 0.0, HEADER);
+
+            // Reserve a band on the right when the header carries widgets.
+            let actions_w = if header_actions.is_some() { 150.0 } else { 0.0 };
+            let title_rect = egui::Rect::from_min_max(
+                strip.min,
+                egui::pos2(strip.right() - actions_w, strip.bottom()),
+            );
+            let mut title_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt(("card_header", title))
+                    .max_rect(title_rect)
+                    .layout(egui::Layout::centered_and_justified(
+                        egui::Direction::LeftToRight,
+                    )),
+            );
+            title_ui.add(
+                egui::Label::new(egui::RichText::new(title).strong()).halign(egui::Align::Center),
+            );
+            if let Some(actions) = header_actions.as_mut() {
+                let acts_rect = egui::Rect::from_min_max(
+                    egui::pos2(strip.right() - actions_w, strip.top()),
+                    strip.max,
+                );
+                let mut acts_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .id_salt(("card_actions", title))
+                        .max_rect(acts_rect)
+                        .layout(egui::Layout::right_to_left(egui::Align::Center)),
+                );
+                actions(&mut acts_ui);
+            }
+
+            // ── Body ──
+            egui::Frame::new()
+                .inner_margin(8.0)
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    add_body(ui)
+                })
+                .inner
+        })
 }
