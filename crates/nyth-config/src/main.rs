@@ -5,6 +5,7 @@
 mod app;
 mod state;
 mod theme;
+mod widgets;
 
 use eframe::egui;
 

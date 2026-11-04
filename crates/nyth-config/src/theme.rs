@@ -200,8 +200,19 @@ pub fn centered_row<R>(
     width: f32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let width = width.min(ui.available_width());
     let height = ui.spacing().interact_size.y;
+    centered_row_sized(ui, width, height, add_contents)
+}
+
+/// Like [`centered_row`], with an explicit height — needed for rows
+/// containing taller widgets (e.g. segmented sliders with tick labels).
+pub fn centered_row_sized<R>(
+    ui: &mut egui::Ui,
+    width: f32,
+    height: f32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let width = width.min(ui.available_width());
     ui.allocate_ui_with_layout(
         egui::vec2(width, height),
         egui::Layout::left_to_right(egui::Align::Center),
