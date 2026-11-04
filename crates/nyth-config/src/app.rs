@@ -148,13 +148,30 @@ impl NythConfigApp {
     /// changes made elsewhere — the daemon's auto-switch flips the profile
     /// on the device, and without this the GUI would keep highlighting
     /// whichever profile was active when it started. Throttled to 1 Hz.
+    ///
+    /// When the device moved on by itself, the viewed profile follows it
+    /// (like the mini window), so the coloured highlight tracks the device.
+    /// Unsaved edits in the current view block the follow until they are
+    /// saved or discarded.
     fn poll_active_profile(&mut self) {
         if self.last_profile_poll.elapsed() < std::time::Duration::from_secs(1) {
             return;
         }
         self.last_profile_poll = std::time::Instant::now();
         match self.state.read_active_profile() {
-            Ok(profile) => self.state.active_profile = profile,
+            Ok(profile) => {
+                if profile == self.state.active_profile {
+                    return;
+                }
+                self.state.active_profile = profile;
+                if !self.settings_dirty && !self.buttons_dirty && self.selected_profile != profile {
+                    self.selected_profile = profile;
+                    // The sidebar's own change detection can no longer
+                    // see the jump (prev is already updated), so load
+                    // the newly viewed profile's data here.
+                    self.load_pending_from_profile();
+                }
+            }
             Err(e) => log::debug!("Active-profile poll failed: {e}"),
         }
     }
