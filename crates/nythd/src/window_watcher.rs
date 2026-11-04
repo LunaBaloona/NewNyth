@@ -3,9 +3,10 @@
 //! Architecture:
 //! 1. A background thread retries KWin script installation until it succeeds
 //! 2. When loaded, the KWin script calls our D-Bus → writes active_window.txt
-//! 3. A polling thread reads the file, with xdotool as a smart fallback
-//!    (xdotool is only used when the file hasn't been updated recently,
-//!    i.e. when the KWin script isn't working yet)
+//! 3. A polling thread reads the file, with xdotool as a bootstrap
+//!    fallback (used only until the KWin integration has delivered its
+//!    first update in this daemon session — xdotool cannot see native
+//!    Wayland windows and would otherwise report wrong ones)
 
 use std::process::Command;
 use std::sync::mpsc;
@@ -17,7 +18,8 @@ use roccat_nyth_profile::config;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(300);
 
-/// How long the file can be stale before we fall back to xdotool.
+/// How long without any file update before the xdotool bootstrap fallback
+/// is consulted (only until the KWin integration proves itself once).
 const FILE_STALE_THRESHOLD: Duration = Duration::from_secs(3);
 
 /// How often to retry KWin script installation.
@@ -177,10 +179,11 @@ pub fn unload_kwin_script() {
 
 /// Spawn the window poller thread.
 ///
-/// Reads from two sources with smart fallback:
-/// - `active_window.txt` (primary — written by KWin script via D-Bus)
-/// - `xdotool` (fallback — only used when the file is stale, meaning
-///   the KWin script isn't working yet or isn't installed)
+/// Reads from two sources:
+/// - `active_window.txt` (primary — written by the KWin script via D-Bus)
+/// - `xdotool` (bootstrap fallback — used only while the KWin integration
+///   has never delivered an update in this daemon session; see inline note
+///   on why falling back on mere staleness corrupts Wayland sessions)
 pub fn start_window_poller() -> mpsc::Receiver<String> {
     let (tx, rx) = mpsc::channel();
 
@@ -200,9 +203,14 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
         .name("newnyth-window-poller".into())
         .spawn(move || {
             let mut last_app = String::new();
-            let mut last_file_modified = std::time::SystemTime::UNIX_EPOCH;
+            // Start from the file's *current* mtime so contents left over
+            // from a previous session are not reported as a fresh
+            // activation — only activations written after this point count.
+            let mut last_file_modified = std::fs::metadata(&file_path)
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
             let mut last_file_update = Instant::now();
-            let mut kwin_announced = false;
+            let mut kwin_active = false;
 
             loop {
                 std::thread::sleep(POLL_INTERVAL);
@@ -216,11 +224,11 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
                             last_file_modified = modified;
                             last_file_update = Instant::now();
 
-                            if !kwin_announced {
+                            if !kwin_active {
                                 log::info!(
                                     "KWin script is active — native Wayland tracking working"
                                 );
-                                kwin_announced = true;
+                                kwin_active = true;
                             }
 
                             if let Ok(content) = std::fs::read_to_string(&file_path) {
@@ -233,10 +241,20 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
                     }
                 }
 
-                // Source 2: xdotool — ONLY if the file is stale (KWin not working).
-                let file_is_stale = last_file_update.elapsed() > FILE_STALE_THRESHOLD;
-                if current_app.is_none() && has_xdotool && file_is_stale {
+                // Source 2: xdotool — bootstrap only, until the KWin
+                // integration has proven itself once in this session.
+                // xdotool only sees XWayland windows, so with a native
+                // Wayland window focused it reports a stale/wrong one;
+                // re-trusting it after every 3 s of inactivity bounced
+                // the profile back to the default seconds after each
+                // correct auto-switch (Wayland + e.g. Brave sessions).
+                if current_app.is_none()
+                    && has_xdotool
+                    && !kwin_active
+                    && last_file_update.elapsed() > FILE_STALE_THRESHOLD
+                {
                     if let Some(app) = xdotool_get_class() {
+                        log::debug!("Active window (xdotool fallback): {app}");
                         current_app = Some(app);
                     }
                 }
