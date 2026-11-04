@@ -38,3 +38,14 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program; if not, see <https://www.gnu.org/licenses/>
 or the LICENSE file in this distribution.
+
+---
+
+This program embeds the "Play" font, bundled in `assets/fonts/`:
+    Copyright (c) 2011, Jonas Hecksher, Playtypes, e-types AS
+    (lasse@e-types.com), with Reserved Font Name 'Play', 'Playtype',
+    'Playtype Sans'.
+    https://fonts.google.com/specimen/Play
+    Licensed under the SIL Open Font License, Version 1.1.
+    The full license text is included alongside the font files
+    (assets/fonts/OFL.txt).
