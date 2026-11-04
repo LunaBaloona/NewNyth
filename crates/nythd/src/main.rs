@@ -172,6 +172,12 @@ fn acquire_instance_lock(lock_path: &Path) -> Result<std::fs::File, String> {
     Ok(file)
 }
 
+/// Last modification time of a file, or `None` if it does not exist or
+/// cannot be stat'ed. Used for the daemon's config-file change watch.
+fn file_mtime(path: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path).ok().and_then(|m| m.modified().ok())
+}
+
 /// Run a single device session: find device, enable driver mode, read events.
 /// Returns when the device disconnects or a shutdown signal is received.
 fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Error>> {
@@ -260,6 +266,13 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
         autoswitch.default_profile
     );
 
+    // Watch the config files for changes so edits are picked up even when
+    // the D-Bus reload notification never arrives (or the daemon runs
+    // without a session bus). Polling mtimes every loop iteration is cheap.
+    let openers_path = roccat_nyth_profile::config::openers_path();
+    let autoswitch_path = roccat_nyth_profile::config::autoswitch_path();
+    let mut config_stamp = (file_mtime(&openers_path), file_mtime(&autoswitch_path));
+
     // Install KWin watcher script (retries in background if KWin isn't ready yet).
     window_watcher::start_kwin_installer();
 
@@ -303,6 +316,24 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
             dbus.clear_reload_flags();
         } else {
             std::thread::sleep(DBUS_POLL_INTERVAL);
+        }
+
+        // Config file watch (belt and braces alongside the D-Bus nudge):
+        // reload whenever a config file was written — by the GUI, a second
+        // instance, or a text editor.
+        let stamp = (file_mtime(&openers_path), file_mtime(&autoswitch_path));
+        if stamp != config_stamp {
+            config_stamp = stamp;
+            openers = roccat_nyth_profile::config::OpenersConfig::load();
+            autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
+            log::info!(
+                "Config files changed — reloaded (auto-switch: {})",
+                if autoswitch.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            );
         }
 
         // ── Handle window changes from the poller ───────
