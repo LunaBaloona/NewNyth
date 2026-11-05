@@ -947,10 +947,14 @@ impl NythConfigApp {
         egui::ScrollArea::vertical()
             .max_height(ui.available_height() - 120.0)
             .show(ui, |ui| {
-                // Three columns: Standard combos, EasyShift combos, and the
-                // numbered mouse photos (Roccat's own button numbering).
+                // Three columns sized to their content: Standard combos,
+                // EasyShift combos (each hugging the dropdowns), and the
+                // numbered mouse photos taking the remaining width.
                 let avail_w = ui.available_width();
-                let block_w = avail_w.min(1400.0);
+                let gap = ui.spacing().item_spacing.x.max(10.0);
+                let combo_w = 290.0f32;
+                let img_w = (avail_w - 2.0 * combo_w - 2.0 * gap).clamp(220.0, 560.0);
+                let block_w = 2.0 * combo_w + img_w + 2.0 * gap;
                 let pad = ((avail_w - block_w) / 2.0).max(0.0);
 
                 let top_tex =
@@ -962,42 +966,53 @@ impl NythConfigApp {
                     NYTH_SIDE_PNG,
                 );
 
+                let mut main_card_h = 0.0f32;
+                let mut side_card_h = 0.0f32;
+
                 ui.horizontal(|ui| {
                     ui.add_space(pad);
-                    ui.columns(3, |cols| {
-                        // ── Column 1: Standard layer ────────────
-                        let main_card =
-                            crate::theme::card(&mut cols[0], "Standard — Main buttons", |ui| {
-                                self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
-                            });
-                        cols[0].add_space(6.0);
-                        let side_card =
-                            crate::theme::card(&mut cols[0], "Standard — Side buttons", |ui| {
-                                self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
-                            });
 
-                        // ── Column 2: EasyShift layer ───────────
-                        crate::theme::card(&mut cols[1], "EasyShift — Main buttons", |ui| {
+                    // ── Column 1: Standard layer ────────────────
+                    ui.vertical(|ui| {
+                        ui.set_width(combo_w);
+                        main_card_h = crate::theme::card(ui, "Standard — Main buttons", |ui| {
+                            self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
+                        })
+                        .response
+                        .rect
+                        .height();
+                        ui.add_space(6.0);
+                        side_card_h = crate::theme::card(ui, "Standard — Side buttons", |ui| {
+                            self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
+                        })
+                        .response
+                        .rect
+                        .height();
+                    });
+
+                    ui.add_space(gap);
+
+                    // ── Column 2: EasyShift layer ───────────────
+                    ui.vertical(|ui| {
+                        ui.set_width(combo_w);
+                        crate::theme::card(ui, "EasyShift — Main buttons", |ui| {
                             self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
                         });
-                        cols[1].add_space(6.0);
-                        crate::theme::card(&mut cols[1], "EasyShift — Side buttons", |ui| {
+                        ui.add_space(6.0);
+                        crate::theme::card(ui, "EasyShift — Side buttons", |ui| {
                             self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
                         });
+                    });
 
-                        // ── Column 3: numbered mouse photos ─────
-                        // Each photo lines up with the cards beside it.
-                        Self::mouse_photo(
-                            &mut cols[2],
-                            top_tex.as_ref(),
-                            main_card.response.rect.height(),
-                        );
-                        cols[2].add_space(6.0);
-                        Self::mouse_photo(
-                            &mut cols[2],
-                            side_tex.as_ref(),
-                            side_card.response.rect.height(),
-                        );
+                    ui.add_space(gap);
+
+                    // ── Column 3: numbered mouse photos ─────────
+                    // Each photo lines up with the cards beside it.
+                    ui.vertical(|ui| {
+                        ui.set_width(img_w);
+                        Self::mouse_photo(ui, top_tex.as_ref(), main_card_h);
+                        ui.add_space(6.0);
+                        Self::mouse_photo(ui, side_tex.as_ref(), side_card_h);
                     });
                 });
             });
@@ -1020,111 +1035,129 @@ impl NythConfigApp {
         grid_id: &str,
         group_every: usize,
     ) {
-        egui::Grid::new(grid_id)
-            .num_columns(2)
-            .spacing([8.0, 2.0])
-            .striped(true)
-            .show(ui, |ui| {
-                let start = range.start;
-                for i in range {
-                    // Insert separator between groups of N.
-                    let pos_in_range = i - start;
-                    if group_every > 0
-                        && pos_in_range > 0
-                        && pos_in_range.is_multiple_of(group_every)
-                    {
-                        ui.separator();
-                        ui.separator();
-                        ui.end_row();
-                    }
-                    let is_selected = self.selected_button == Some(i);
-                    let btn = &mut buttons.buttons[i];
-                    let name = if i >= NYTH_PHYSICAL_BUTTON_NUM {
-                        display::BUTTON_NAMES[i]
-                            .strip_prefix("Shift+")
-                            .unwrap_or(display::BUTTON_NAMES[i])
-                    } else {
-                        display::BUTTON_NAMES[i]
-                    };
+        // Long grids (12-key side keypads) are split into groups of
+        // `group_every` rows separated by an accent-blue rule, mirroring
+        // the 4×3 keypad blocks on the physical mouse.
+        let mut groups = Vec::new();
+        if group_every == 0 {
+            groups.push(range);
+        } else {
+            let mut start = range.start;
+            while start < range.end {
+                let end = (start + group_every).min(range.end);
+                groups.push(start..end);
+                start += group_every;
+            }
+        }
 
-                    // Button name (clickable to select)
-                    let name_label = if is_selected {
-                        egui::RichText::new(name).strong()
-                    } else {
-                        egui::RichText::new(name)
-                    };
-                    if ui
-                        .add(egui::Label::new(name_label).sense(egui::Sense::click()))
-                        .clicked()
-                    {
-                        self.selected_button = Some(i);
-                        // Load opener text if this is an Open application button.
-                        self.opener_edit_buf = self
-                            .state
-                            .openers
-                            .get(self.selected_profile, i as u8)
-                            .unwrap_or("")
-                            .to_string();
-                    }
+        let row_h = ui.spacing().interact_size.y;
+        for (gi, group) in groups.into_iter().enumerate() {
+            if gi > 0 {
+                ui.add_space(5.0);
+                crate::theme::accent_rule(ui);
+                ui.add_space(5.0);
+            }
+            egui::Grid::new(format!("{grid_id}_{gi}"))
+                .num_columns(2)
+                .spacing([8.0, 2.0])
+                .striped(true)
+                .show(ui, |ui| {
+                    for i in group {
+                        let is_selected = self.selected_button == Some(i);
+                        let btn = &mut buttons.buttons[i];
+                        let name = if i >= NYTH_PHYSICAL_BUTTON_NUM {
+                            display::BUTTON_NAMES[i]
+                                .strip_prefix("Shift+")
+                                .unwrap_or(display::BUTTON_NAMES[i])
+                        } else {
+                            display::BUTTON_NAMES[i]
+                        };
 
-                    // Type dropdown
-                    let current_name = display::button_type_name(btn.button_type);
-                    let display_text = match btn.button_type {
-                        0x05 => {
-                            // Show shortcut summary inline
-                            let mods = display::modifier_string(btn.modifier);
-                            let key = hid_key_name(btn.key);
-                            if btn.key != 0 {
-                                format!("⌨ {mods}+{key}")
-                            } else {
-                                "⌨ Shortcut (click to set)".into()
-                            }
-                        }
-                        0x0f => {
-                            let cmd = self
+                        // Button name (clickable to select), pinned width so
+                        // the dropdown column lines up across the groups.
+                        let name_label = if is_selected {
+                            egui::RichText::new(name).strong()
+                        } else {
+                            egui::RichText::new(name)
+                        };
+                        if ui
+                            .add_sized(
+                                egui::vec2(84.0, row_h),
+                                egui::Label::new(name_label)
+                                    .selectable(false)
+                                    .sense(egui::Sense::click()),
+                            )
+                            .clicked()
+                        {
+                            self.selected_button = Some(i);
+                            // Load opener text if this is an Open application button.
+                            self.opener_edit_buf = self
                                 .state
                                 .openers
                                 .get(self.selected_profile, i as u8)
-                                .unwrap_or("");
-                            if cmd.is_empty() {
-                                "▶ Open app (click to set)".into()
-                            } else {
-                                format!("▶ {}", truncate(cmd, 20))
-                            }
+                                .unwrap_or("")
+                                .to_string();
                         }
-                        _ => current_name.to_string(),
-                    };
 
-                    let mut changed = false;
-                    egui::ComboBox::from_id_salt(format!("btn_{i}"))
-                        .selected_text(&display_text)
-                        .width(170.0)
-                        .show_ui(ui, |ui| {
-                            for &(type_val, type_name) in ASSIGNABLE_BUTTON_TYPES {
-                                if ui
-                                    .selectable_label(btn.button_type == type_val, type_name)
-                                    .clicked()
-                                    && btn.button_type != type_val
-                                {
-                                    btn.button_type = type_val;
-                                    if type_val != 0x05 {
-                                        btn.modifier = 0;
-                                        btn.key = 0;
-                                    }
-                                    changed = true;
-                                    // Auto-select this button for detail editing.
-                                    self.selected_button = Some(i);
-                                    self.opener_edit_buf = String::new();
+                        // Type dropdown
+                        let current_name = display::button_type_name(btn.button_type);
+                        let display_text = match btn.button_type {
+                            0x05 => {
+                                // Show shortcut summary inline
+                                let mods = display::modifier_string(btn.modifier);
+                                let key = hid_key_name(btn.key);
+                                if btn.key != 0 {
+                                    format!("⌨ {mods}+{key}")
+                                } else {
+                                    "⌨ Shortcut (click to set)".into()
                                 }
                             }
-                        });
+                            0x0f => {
+                                let cmd = self
+                                    .state
+                                    .openers
+                                    .get(self.selected_profile, i as u8)
+                                    .unwrap_or("");
+                                if cmd.is_empty() {
+                                    "▶ Open app (click to set)".into()
+                                } else {
+                                    format!("▶ {}", truncate(cmd, 20))
+                                }
+                            }
+                            _ => current_name.to_string(),
+                        };
 
-                    if changed {
-                        self.buttons_dirty = true;
+                        let mut changed = false;
+                        egui::ComboBox::from_id_salt(format!("btn_{i}"))
+                            .selected_text(&display_text)
+                            .width(170.0)
+                            .show_ui(ui, |ui| {
+                                for &(type_val, type_name) in ASSIGNABLE_BUTTON_TYPES {
+                                    if ui
+                                        .selectable_label(btn.button_type == type_val, type_name)
+                                        .clicked()
+                                        && btn.button_type != type_val
+                                    {
+                                        btn.button_type = type_val;
+                                        if type_val != 0x05 {
+                                            btn.modifier = 0;
+                                            btn.key = 0;
+                                        }
+                                        changed = true;
+                                        // Auto-select this button for detail editing.
+                                        self.selected_button = Some(i);
+                                        self.opener_edit_buf = String::new();
+                                    }
+                                }
+                            });
+
+                        if changed {
+                            self.buttons_dirty = true;
+                        }
+                        ui.end_row();
                     }
-                    ui.end_row();
-                }
-            });
+                });
+        }
     }
 
     /// Detail editor panel shown below the button grids.

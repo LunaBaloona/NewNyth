@@ -135,6 +135,18 @@ pub fn card<R>(
     card_inner(ui, title, None, add_body)
 }
 
+/// Full-width ACCENT-blue horizontal rule (keypad row separation in the
+/// side-button grids).
+pub fn accent_rule(ui: &mut egui::Ui) {
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_at_least(egui::vec2(width, 2.0), egui::Sense::hover());
+    ui.painter().rect_filled(
+        egui::Rect::from_center_size(rect.center(), egui::vec2(width, 1.5)),
+        0.75,
+        ACCENT,
+    );
+}
+
 /// Like [`card`], but with extra widgets right-aligned inside the header
 /// strip (e.g. a "Default" checkbox).
 pub fn card_with_actions<R>(
