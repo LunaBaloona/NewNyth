@@ -11,6 +11,7 @@ use crate::state::{hid_key_name, DeviceState, ASSIGNABLE_BUTTON_TYPES, HID_KEYS}
 pub enum Section {
     Settings,
     Buttons,
+    Advanced,
     Lighting,
     AutoSwitch,
 }
@@ -231,6 +232,7 @@ impl eframe::App for NythConfigApp {
                 for (section, label) in [
                     (Section::Settings, "SETTINGS"),
                     (Section::Buttons, "BUTTON ASSIGNMENT"),
+                    (Section::Advanced, "ADVANCED"),
                     (Section::Lighting, "LIGHTING"),
                     (Section::AutoSwitch, "AUTO-SWITCH"),
                 ] {
@@ -361,11 +363,19 @@ impl eframe::App for NythConfigApp {
                 });
                 return;
             }
-            match self.section {
-                Section::Settings => self.ui_settings(ui, &ctx),
-                Section::Buttons => self.ui_buttons(ui, &ctx),
-                Section::Lighting => self.ui_lighting(ui, &ctx),
-                Section::AutoSwitch => self.ui_autoswitch(ui, &ctx),
+            if matches!(
+                self.section,
+                Section::Settings | Section::Advanced | Section::Lighting
+            ) {
+                // Long single-column card stacks must stay reachable when
+                // the window is short; Buttons and Auto-switch bring their
+                // own scroll areas and must not be wrapped twice.
+                egui::ScrollArea::vertical()
+                    .id_salt("section_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| self.ui_section(ui, &ctx));
+            } else {
+                self.ui_section(ui, &ctx);
             }
         });
     }
@@ -374,6 +384,19 @@ impl eframe::App for NythConfigApp {
 // ─── Settings panel (unchanged from v0.3.0) ────────────────────────
 
 impl NythConfigApp {
+    /// Paint the body of the active tab. Lives outside the `eframe::App`
+    /// impl so both the plain and the scroll-wrapped CentralPanel paths
+    /// can call it.
+    fn ui_section(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        match self.section {
+            Section::Settings => self.ui_settings(ui, ctx),
+            Section::Buttons => self.ui_buttons(ui, ctx),
+            Section::Advanced => self.ui_advanced(ui, ctx),
+            Section::Lighting => self.ui_lighting(ui, ctx),
+            Section::AutoSwitch => self.ui_autoswitch(ui, ctx),
+        }
+    }
+
     fn ui_settings(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let settings = match self.pending_settings.as_mut() {
             Some(s) => s as *mut ProfileSettings,
@@ -389,10 +412,10 @@ impl NythConfigApp {
 
         // Single stacked column, contents centred (Swarm keeps Settings
         // narrow and vertical rather than spreading over two columns).
-        crate::theme::card(ui, "CPI levels", |ui| {
+        crate::theme::card(ui, "DPI switcher", |ui| {
             ui.vertical_centered(|ui| {
                 for i in 0..NYTH_CPI_LEVELS_NUM {
-                    crate::theme::centered_row(ui, 430.0, |ui| {
+                    crate::theme::centered_row_sized(ui, 540.0, 34.0, |ui| {
                         let mut en = settings.cpi_levels_enabled & (1 << i) != 0;
                         if ui.checkbox(&mut en, "").changed() {
                             if en {
@@ -408,25 +431,38 @@ impl NythConfigApp {
                         } else {
                             format!("Level {}", i + 1)
                         };
-                        ui.add_sized(
-                            [88.0, 20.0],
-                            egui::Label::new(label).halign(egui::Align::Max),
-                        );
-                        if ui
-                            .add(
-                                egui::Slider::new(
-                                    &mut cpi,
-                                    NYTH_CPI_MIN as f32..=NYTH_CPI_MAX as f32,
-                                )
-                                .step_by(NYTH_CPI_STEP as f64)
-                                .suffix(" DPI")
-                                .clamping(egui::SliderClamping::Always),
+                        // Whole row (name, bar, value box) dims while the
+                        // level is unchecked — only the checkbox stays live.
+                        ui.add_enabled_ui(en, |ui| {
+                            let text = if en {
+                                egui::RichText::new(label)
+                            } else {
+                                egui::RichText::new(label).weak()
+                            };
+                            ui.add_sized(
+                                [88.0, 20.0],
+                                egui::Label::new(text).halign(egui::Align::Max),
+                            );
+                            // Swarm's DPI switcher: chunky segmented rail
+                            // with preset ticks and a value box.
+                            let slider = crate::widgets::SegmentedSlider::new(
+                                &mut cpi,
+                                NYTH_CPI_MIN as f32..=NYTH_CPI_MAX as f32,
                             )
-                            .changed()
-                        {
-                            settings.set_cpi_level(i, cpi as u16);
-                            self.settings_dirty = true;
-                        }
+                            .step(NYTH_CPI_STEP as f32)
+                            .width(300.0)
+                            .value_box(0)
+                            .tick(200.0, "200")
+                            .tick(2000.0, "2000")
+                            .tick(4000.0, "4000")
+                            .tick(6000.0, "6000")
+                            .tick(8200.0, "8200")
+                            .tick(12000.0, "12000");
+                            if ui.add(slider).changed() {
+                                settings.set_cpi_level(i, cpi as u16);
+                                self.settings_dirty = true;
+                            }
+                        });
                     });
                 }
                 ui.add_space(4.0);
@@ -450,61 +486,36 @@ impl NythConfigApp {
         });
 
         ui.add_space(8.0);
-        crate::theme::card(ui, "Polling rate", |ui| {
-            ui.vertical_centered(|ui| {
-                crate::theme::centered_row(ui, 320.0, |ui| {
-                    for (v, l) in [
-                        (1u8, "125 Hz"),
-                        (2, "250 Hz"),
-                        (3, "500 Hz"),
-                        (4, "1000 Hz"),
-                    ] {
-                        if ui.selectable_label(settings.polling_rate == v, l).clicked()
-                            && settings.polling_rate != v
-                        {
-                            settings.polling_rate = v;
-                            self.settings_dirty = true;
-                        }
-                    }
-                });
-            });
-        });
-
-        ui.add_space(8.0);
         crate::theme::card(ui, "Sensitivity", |ui| {
             ui.vertical_centered(|ui| {
-                let mut adv = settings.advanced_sensitivity != 0;
-                if ui.checkbox(&mut adv, "Independent X / Y").changed() {
-                    settings.advanced_sensitivity = if adv { 1 } else { 0 };
-                    if !adv {
-                        settings.sensitivity_y = settings.sensitivity_x;
+                // Swarm shows sensitivity as −5…+5 around a neutral 0;
+                // the device stores 1…11 (6 = neutral), a straight −6 shift.
+                // This is the synced control: Y follows X unless advanced
+                // sensitivity (Advanced tab) has split the axes.
+                let mut sx = settings.sensitivity_x as f32 - 6.0;
+                crate::theme::centered_row_sized(ui, 500.0, 34.0, |ui| {
+                    let mut slider =
+                        crate::widgets::SegmentedSlider::new(&mut sx, -5.0..=5.0).width(300.0);
+                    for t in -5..=5 {
+                        slider = slider.tick(t as f32, t.to_string());
                     }
-                    self.settings_dirty = true;
-                }
-                let mut sx = settings.sensitivity_x as f32;
-                crate::theme::centered_row(ui, 400.0, |ui| {
-                    if ui
-                        .add(egui::Slider::new(&mut sx, 1.0..=11.0).text("X sensitivity"))
-                        .changed()
-                    {
-                        settings.sensitivity_x = sx as u8;
-                        if !adv {
-                            settings.sensitivity_y = sx as u8;
+                    if ui.add(slider.value_box(0)).changed() {
+                        let v = (sx + 6.0).round() as u8;
+                        settings.sensitivity_x = v;
+                        if settings.advanced_sensitivity == 0 {
+                            settings.sensitivity_y = v;
                         }
                         self.settings_dirty = true;
                     }
                 });
-                if adv {
-                    let mut sy = settings.sensitivity_y as f32;
-                    crate::theme::centered_row(ui, 400.0, |ui| {
-                        if ui
-                            .add(egui::Slider::new(&mut sy, 1.0..=11.0).text("Y sensitivity"))
-                            .changed()
-                        {
-                            settings.sensitivity_y = sy as u8;
-                            self.settings_dirty = true;
-                        }
-                    });
+                if settings.advanced_sensitivity != 0 {
+                    ui.label(
+                        egui::RichText::new(
+                            "Separate axes are enabled — set X and Y on the Advanced tab.",
+                        )
+                        .small()
+                        .weak(),
+                    );
                 }
             });
         });
@@ -513,7 +524,212 @@ impl NythConfigApp {
         self.apply_revert_bar(ui, ctx, true);
     }
 
-    // ─── Lighting panel (unchanged) ────────────────────────────
+    // ─── Advanced panel (Swarm's third tab) ──────────────────────────
+
+    fn ui_advanced(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let settings = match self.pending_settings.as_mut() {
+            Some(s) => s as *mut ProfileSettings,
+            None => {
+                ui.label("No settings available.");
+                return;
+            }
+        };
+        let settings = unsafe { &mut *settings };
+
+        ui.heading(format!("Profile {} — Advanced", self.selected_profile + 1));
+        ui.add_space(8.0);
+
+        // ── Per-profile: split-axis sensitivity ──────────────────────
+        crate::theme::card(ui, "Advanced sensitivity", |ui| {
+            ui.vertical_centered(|ui| {
+                let adv = settings.advanced_sensitivity != 0;
+                let axes = [
+                    ('X', settings.sensitivity_x, true),
+                    ('Y', settings.sensitivity_y, adv),
+                ];
+                for (axis, value, enabled) in axes {
+                    // −5…+5 display, device stores 1…11 (see Settings tab).
+                    let mut v = value as f32 - 6.0;
+                    crate::theme::centered_row_sized(ui, 540.0, 34.0, |ui| {
+                        ui.add_sized(
+                            [30.0, 20.0],
+                            egui::Label::new(format!("{axis}:")).halign(egui::Align::Max),
+                        );
+                        ui.add_enabled_ui(enabled, |ui| {
+                            let mut slider =
+                                crate::widgets::SegmentedSlider::new(&mut v, -5.0..=5.0)
+                                    .width(300.0);
+                            for t in -5..=5 {
+                                slider = slider.tick(t as f32, t.to_string());
+                            }
+                            if ui.add(slider.value_box(0)).changed() {
+                                let raw = (v + 6.0).round() as u8;
+                                if axis == 'X' {
+                                    settings.sensitivity_x = raw;
+                                } else {
+                                    settings.sensitivity_y = raw;
+                                }
+                                self.settings_dirty = true;
+                            }
+                        });
+                    });
+                }
+                ui.add_space(4.0);
+                let mut adv = settings.advanced_sensitivity != 0;
+                if ui
+                    .checkbox(&mut adv, "Enable advanced sensitivity")
+                    .changed()
+                {
+                    settings.advanced_sensitivity = if adv { 1 } else { 0 };
+                    // Never jump: the Y axis starts where X is, whichever
+                    // way the switch is thrown.
+                    settings.sensitivity_y = settings.sensitivity_x;
+                    self.settings_dirty = true;
+                }
+            });
+        });
+
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Polling rate", |ui| {
+            ui.vertical_centered(|ui| {
+                ui.label(
+                    egui::RichText::new("How often the mouse reports to the computer.")
+                        .small()
+                        .weak(),
+                );
+                let mut rate = settings.polling_rate;
+                ui.vertical_centered(|ui| {
+                    for (v, l) in [
+                        (1u8, "125 Hz"),
+                        (2, "250 Hz"),
+                        (3, "500 Hz"),
+                        (4, "1000 Hz"),
+                    ] {
+                        if ui.radio_value(&mut rate, v, l).changed() {
+                            settings.polling_rate = rate;
+                            self.settings_dirty = true;
+                        }
+                    }
+                });
+            });
+        });
+
+        // ── Device-level: sensor control units (report 0x0f) ─────────
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Tracking Control Unit", |ui| {
+            ui.vertical_centered(|ui| {
+                match self.state.control_unit {
+                    Some(cu) => {
+                        let on = cu.tcu != 0;
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Lift-off detection is currently {}.",
+                                if on { "on" } else { "off" }
+                            ))
+                            .small()
+                            .weak(),
+                        );
+                        crate::theme::centered_row(ui, 220.0, |ui| {
+                            // The device only ever switches the TCU on via
+                            // the surface-calibration handshake, which
+                            // NewNyth does not drive yet — so "On" is
+                            // display-only and switching off is the write.
+                            ui.add_enabled_ui(false, |ui| {
+                                let _ = ui.radio(on, "On");
+                            });
+                            if ui.radio(!on, "Off").clicked() && on {
+                                match self.state.apply_tracking_control_off() {
+                                    Ok(()) => {
+                                        self.state.refresh_control_unit();
+                                        self.set_status("Tracking Control Unit off", ctx);
+                                    }
+                                    Err(e) => self.set_status(format!("Error: {e}"), ctx),
+                                }
+                            }
+                        });
+                        ui.label(
+                            egui::RichText::new(
+                                "Switching it back on needs surface calibration, not offered by NewNyth yet.",
+                            )
+                            .small()
+                            .weak(),
+                        );
+                    }
+                    None => {
+                        ui.label("Could not read the sensor state.");
+                        ui.label(
+                            egui::RichText::new("Use ↻ Refresh once the mouse is reachable.")
+                                .small()
+                                .weak(),
+                        );
+                    }
+                }
+            });
+        });
+
+        ui.add_space(8.0);
+        crate::theme::card(ui, "Distance Control Unit", |ui| {
+            ui.vertical_centered(|ui| {
+                match self.state.control_unit {
+                    Some(cu) => {
+                        let current = DistanceControl::from_u8(cu.dcu);
+                        ui.label(
+                            egui::RichText::new(
+                                "Lift-off distance: how high the mouse may float before tracking stops.",
+                            )
+                            .small()
+                            .weak(),
+                        );
+                        crate::theme::centered_row(ui, 420.0, |ui| {
+                            for d in DistanceControl::ALL {
+                                if ui.radio(d == current, Self::dcu_label(d)).clicked()
+                                    && d != current
+                                {
+                                    match self.state.apply_distance_control(d) {
+                                        Ok(()) => {
+                                            self.state.refresh_control_unit();
+                                            self.set_status(
+                                                format!("Lift-off distance: {}", Self::dcu_label(d)),
+                                                ctx,
+                                            );
+                                        }
+                                        Err(e) => self.set_status(format!("Error: {e}"), ctx),
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    None => {
+                        ui.label("Could not read the sensor state.");
+                    }
+                }
+            });
+        });
+
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new(
+                "Tracking and lift-off distance are mouse-wide settings: they apply immediately and are shared by all profiles.",
+            )
+            .small()
+            .weak(),
+        );
+
+        ui.add_space(8.0);
+        self.apply_revert_bar(ui, ctx, true);
+    }
+
+    /// Swarm's labels for the lift-off distance settings.
+    fn dcu_label(d: DistanceControl) -> &'static str {
+        match d {
+            DistanceControl::Off => "Off (default)",
+            DistanceControl::Normal => "Normal",
+            DistanceControl::Low => "Low",
+            DistanceControl::ExtraLow => "Extra Low",
+        }
+    }
+
+    // ─── Lighting panel ──────────────────────────────────────
 
     fn ui_lighting(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let settings = match self.pending_settings.as_mut() {
@@ -543,11 +759,24 @@ impl NythConfigApp {
         } else {
             ui.add_space(8.0);
             crate::theme::card(ui, "Colours", |ui| {
+                // Roomier text and fatter swatches take up the space the
+                // (removed) preview card used to fill — the colour well
+                // sizes itself from `interact_size`. `style_mut` is
+                // clone-on-write: it applies to this card's `Ui` and its
+                // children, not to the sibling cards.
+                let style = ui.style_mut();
+                style
+                    .text_styles
+                    .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+                style
+                    .text_styles
+                    .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
+                style.spacing.interact_size = egui::vec2(26.0, 26.0);
                 ui.vertical_centered(|ui| {
                     for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
-                        crate::theme::centered_row(ui, 380.0, |ui| {
+                        crate::theme::centered_row(ui, 460.0, |ui| {
                             ui.add_sized(
-                                [62.0, 20.0],
+                                [72.0, 26.0],
                                 egui::Label::new(format!("{zone}:")).halign(egui::Align::Max),
                             );
                             let l = &mut settings.lights[i];
@@ -563,7 +792,7 @@ impl NythConfigApp {
                                 self.settings_dirty = true;
                             }
                             ui.add_sized(
-                                [82.0, 20.0],
+                                [98.0, 26.0],
                                 egui::Label::new(format!(
                                     "#{:02x}{:02x}{:02x}",
                                     l.red, l.green, l.blue

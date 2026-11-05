@@ -28,6 +28,12 @@ const CONTROL_HOVER: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x40, 0x46);
 /// Hairline borders between surfaces.
 const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
 const TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe8, 0xe8);
+/// Normal-state interactive colour — button/combo text, check marks
+/// and the resting scrollbar handle (egui paints the handle with
+/// `widgets.*.fg_stroke` when the bar uses foreground colours). Full
+/// TEXT brightness made the solid scrollbar glare, so interactive
+/// chrome sits a notch dimmer; plain labels stay at TEXT.
+const INTERACTIVE: egui::Color32 = egui::Color32::from_rgb(0xbf, 0xbf, 0xbf);
 /// Section-card header strip: lighter than the card body so the title band
 /// stands out (the Swarm boxes have tinted, centred headings).
 const HEADER: egui::Color32 = egui::Color32::from_rgb(0x26, 0x2a, 0x2f);
@@ -82,7 +88,7 @@ fn apply_colors(ctx: &egui::Context) {
     v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, EDGE);
 
     v.widgets.inactive.bg_fill = CONTROL;
-    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, TEXT);
+    v.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, INTERACTIVE);
     v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, EDGE);
 
     // Hover/active lean on the accent blue: the plain-grey tint egui
@@ -96,6 +102,21 @@ fn apply_colors(ctx: &egui::Context) {
     v.widgets.active.bg_stroke = egui::Stroke::new(1.0, ACCENT);
 
     style.visuals = v;
+
+    // Scrollbars: egui's default "floating" bars fade to an almost
+    // invisible hairline at rest (they only appear properly on hover,
+    // which made whole screens unreachable-looking at small window
+    // sizes). A non-floating bar is laid out solidly and painted at
+    // full opacity; the foreground colour gives the same crisp handle
+    // the floating bar only showed under the mouse.
+    style.spacing.scroll = egui::style::ScrollStyle {
+        floating: false,
+        foreground_color: true,
+        bar_width: 10.5,
+        handle_min_length: 40.0,
+        ..Default::default()
+    };
+
     ctx.set_style_of(egui::Theme::Dark, style);
 }
 
@@ -200,8 +221,19 @@ pub fn centered_row<R>(
     width: f32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    let width = width.min(ui.available_width());
     let height = ui.spacing().interact_size.y;
+    centered_row_sized(ui, width, height, add_contents)
+}
+
+/// Like [`centered_row`], with an explicit height — needed for rows
+/// containing taller widgets (e.g. segmented sliders with tick labels).
+pub fn centered_row_sized<R>(
+    ui: &mut egui::Ui,
+    width: f32,
+    height: f32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let width = width.min(ui.available_width());
     ui.allocate_ui_with_layout(
         egui::vec2(width, height),
         egui::Layout::left_to_right(egui::Align::Center),

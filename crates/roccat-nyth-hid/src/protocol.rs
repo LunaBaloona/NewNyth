@@ -476,6 +476,29 @@ unsafe impl Pod for ControlUnitReport {}
 
 impl ControlUnitReport {
     pub const SIZE: usize = 6;
+
+    /// Write sentinel for `dcu`/`tcu`: leave that field unchanged.
+    ///
+    /// The original driver never writes both fields at once — each
+    /// command masks the other one with 0xff (roccat-tools
+    /// `nyth_control_unit.c`).
+    pub const UNCHANGED: u8 = 0xff;
+
+    /// Build a control-unit write command.
+    ///
+    /// Set a field to [`Self::UNCHANGED`] to leave it alone; `action`
+    /// carries the calibration command (`TcuAction::Off` for a plain
+    /// set).
+    pub fn new(dcu: u8, tcu: u8, action: u8) -> Self {
+        Self {
+            report_id: ReportId::ControlUnit as u8,
+            size: Self::SIZE as u8,
+            dcu,
+            tcu,
+            unused: 0,
+            action,
+        }
+    }
 }
 
 /// Distance control unit (lift-off distance) settings.
@@ -486,6 +509,25 @@ pub enum DistanceControl {
     ExtraLow = 1,
     Low = 2,
     Normal = 3,
+}
+
+impl DistanceControl {
+    /// Every setting in the order Swarm lists them.
+    pub const ALL: [DistanceControl; 4] = [
+        DistanceControl::Off,
+        DistanceControl::Normal,
+        DistanceControl::Low,
+        DistanceControl::ExtraLow,
+    ];
+
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            1 => DistanceControl::ExtraLow,
+            2 => DistanceControl::Low,
+            3 => DistanceControl::Normal,
+            _ => DistanceControl::Off,
+        }
+    }
 }
 
 /// Tracking control unit actions.

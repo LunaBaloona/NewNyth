@@ -212,6 +212,38 @@ impl NythDevice {
         Ok(report)
     }
 
+    /// Set the lift-off distance (distance control unit).
+    ///
+    /// Takes effect immediately and is device-level, not per-profile.
+    /// The TCU field is sent as [`ControlUnitReport::UNCHANGED`] so the
+    /// tracking unit stays untouched, mirroring the original driver's
+    /// `nyth_distance_control_unit_set()`.
+    pub fn write_distance_control(&self, dcu: DistanceControl) -> Result<()> {
+        let report = ControlUnitReport::new(
+            dcu as u8,
+            ControlUnitReport::UNCHANGED,
+            TcuAction::Off as u8,
+        );
+        hidraw::write_struct(&self.dev, &report)?;
+        Ok(())
+    }
+
+    /// Turn the tracking control unit (lift detection) off.
+    ///
+    /// Mirrors `nyth_tracking_control_unit_off()`. The original driver
+    /// only ever turns the TCU *on* as part of the Start→Accept surface
+    /// calibration handshake, which NewNyth does not drive yet, so
+    /// switching off is the only direct TCU write offered here.
+    pub fn write_tracking_control_off(&self) -> Result<()> {
+        let report = ControlUnitReport::new(
+            ControlUnitReport::UNCHANGED,
+            TcuAction::Off as u8,
+            TcuAction::Off as u8,
+        );
+        hidraw::write_struct(&self.dev, &report)?;
+        Ok(())
+    }
+
     // ── Button set (side-button preset) ─────────────────────────────
 
     /// Read the button set preset for a profile.
