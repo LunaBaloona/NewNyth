@@ -1007,10 +1007,16 @@ impl NythConfigApp {
                     ui.add_space(gap);
 
                     // ── Column 3: numbered mouse illustrations ──
-                    // Each illustration lines up with the cards beside it.
+                    // The side illustration lines up with its card; the top
+                    // mouse gets a bigger budget — 25% more than its card,
+                    // or whatever height the image column has left after
+                    // the side image in a taller window — so its numbers
+                    // read clearly and it grows/shrinks with the window.
                     ui.vertical(|ui| {
                         ui.set_width(img_w);
-                        Self::mouse_illustration(ui, top_tex.as_ref(), main_card_h);
+                        let top_h =
+                            (ui.available_height() - side_card_h - 12.0).max(main_card_h * 1.25);
+                        Self::mouse_illustration(ui, top_tex.as_ref(), top_h);
                         ui.add_space(6.0);
                         Self::mouse_illustration(ui, side_tex.as_ref(), side_card_h);
                     });
