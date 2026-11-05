@@ -22,6 +22,8 @@ pub struct DeviceState {
     pub error_message: Option<String>,
     pub openers: OpenersConfig,
     pub autoswitch: AutoSwitchConfig,
+    /// Device-level TCU/DCU state, read on (re)connect.
+    pub control_unit: Option<ControlUnitReport>,
 }
 
 impl DeviceState {
@@ -36,6 +38,7 @@ impl DeviceState {
             error_message: None,
             openers: OpenersConfig::default(),
             autoswitch: AutoSwitchConfig::default(),
+            control_unit: None,
         }
     }
 
@@ -60,6 +63,7 @@ impl DeviceState {
             error_message: None,
             openers: OpenersConfig::load(),
             autoswitch: AutoSwitchConfig::load(),
+            control_unit: nyth.read_control_unit().ok(),
         };
 
         for i in 0..NYTH_PROFILE_NUM {
@@ -121,6 +125,28 @@ impl DeviceState {
             let _ = nyth.write_active_profile(index);
         }
         Ok(())
+    }
+
+    /// Re-read the device-level control unit (TCU/DCU) so the UI can
+    /// reflect the confirmed state after a write.
+    pub fn refresh_control_unit(&mut self) {
+        self.control_unit = NythDevice::open_first()
+            .and_then(|nyth| nyth.read_control_unit())
+            .ok();
+    }
+
+    /// Set the lift-off distance (distance control unit). Device-level:
+    /// applies immediately to every profile.
+    pub fn apply_distance_control(&self, dcu: DistanceControl) -> Result<(), String> {
+        let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
+        nyth.write_distance_control(dcu).map_err(|e| e.to_string())
+    }
+
+    /// Turn the tracking control unit off. Device-level and immediate;
+    /// switching it back on requires calibration (not offered yet).
+    pub fn apply_tracking_control_off(&self) -> Result<(), String> {
+        let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
+        nyth.write_tracking_control_off().map_err(|e| e.to_string())
     }
 
     pub fn save_openers(&self) -> Result<(), String> {
