@@ -26,7 +26,11 @@ const CANVAS: egui::Color32 = egui::Color32::from_rgb(0x12, 0x13, 0x14);
 const CONTROL: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2e, 0x33);
 const CONTROL_HOVER: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x40, 0x46);
 /// Hairline borders between surfaces.
-const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
+pub const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
+/// Inset backing behind the mouse illustrations on the Buttons tab: the
+/// artwork is transparent-background vector art and sits in a canvas-dark
+/// well (the old light "photo card" glare fought the dark theme).
+pub const ILLU_BG: egui::Color32 = CANVAS;
 const TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe8, 0xe8);
 /// Normal-state interactive colour — button/combo text, check marks
 /// and the resting scrollbar handle (egui paints the handle with
@@ -133,6 +137,18 @@ pub fn card<R>(
     add_body: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
     card_inner(ui, title, None, add_body)
+}
+
+/// Full-width ACCENT-blue horizontal rule (keypad row separation in the
+/// side-button grids).
+pub fn accent_rule(ui: &mut egui::Ui) {
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_at_least(egui::vec2(width, 2.0), egui::Sense::hover());
+    ui.painter().rect_filled(
+        egui::Rect::from_center_size(rect.center(), egui::vec2(width, 1.5)),
+        0.75,
+        ACCENT,
+    );
 }
 
 /// Like [`card`], but with extra widgets right-aligned inside the header
