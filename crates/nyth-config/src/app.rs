@@ -93,12 +93,21 @@ impl NythConfigApp {
         cache.clone()
     }
 
-    /// Paint a mouse illustration aspect-fitted into `max_h` of the column, centred.
-    fn mouse_illustration(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>, max_h: f32) {
+    /// Paint a mouse illustration aspect-fitted into `max_h` of the column,
+    /// centred, never above `max_scale` of its natural size.
+    fn mouse_illustration(
+        ui: &mut egui::Ui,
+        tex: Option<&egui::TextureHandle>,
+        max_h: f32,
+        max_scale: f32,
+    ) {
         let Some(tex) = tex else { return };
         let avail_w = ui.available_width();
         let size = tex.size_vec2();
-        let scale = (avail_w / size.x).min(max_h / size.y).min(1.0);
+        let scale = (avail_w / size.x)
+            .min(max_h / size.y)
+            .min(1.0)
+            .min(max_scale.max(0.0));
         let img_size = size * scale;
         let frame =
             egui::Rect::from_min_size(ui.cursor().min, egui::vec2(avail_w, max_h.max(img_size.y)));
@@ -421,11 +430,11 @@ impl eframe::App for NythConfigApp {
             }
             if matches!(
                 self.section,
-                Section::Settings | Section::Advanced | Section::Lighting
+                Section::Settings | Section::Buttons | Section::Advanced | Section::Lighting
             ) {
-                // Long single-column card stacks must stay reachable when
-                // the window is short; Buttons and Auto-switch bring their
-                // own scroll areas and must not be wrapped twice.
+                // Long card stacks must stay reachable when the window is
+                // short. Auto-switch keeps its own profile scroll (the save
+                // bar has to live outside it) and must not be wrapped twice.
                 egui::ScrollArea::vertical()
                     .id_salt("section_scroll")
                     .auto_shrink([false, false])
@@ -944,84 +953,82 @@ impl NythConfigApp {
         // EasyShift main: 20..28
         // EasyShift side: 28..40
 
-        egui::ScrollArea::vertical()
-            .max_height(ui.available_height() - 120.0)
-            .show(ui, |ui| {
-                // Three columns sized to their content: Standard combos,
-                // EasyShift combos (each hugging the dropdowns), and the
-                // numbered mouse illustrations taking the remaining width.
-                let avail_w = ui.available_width();
-                let gap = ui.spacing().item_spacing.x.max(10.0);
-                let combo_w = 290.0f32;
-                let img_w = (avail_w - 2.0 * combo_w - 2.0 * gap).clamp(220.0, 560.0);
-                let block_w = 2.0 * combo_w + img_w + 2.0 * gap;
-                let pad = ((avail_w - block_w) / 2.0).max(0.0);
+        // The three-column block below flows directly into the outer
+        // `section_scroll` (same as the other tabs) so the scrollbar
+        // styling stays uniform; it must not open a second scroll area.
+        {
+            // Three columns sized to their content: Standard combos,
+            // EasyShift combos (each hugging the dropdowns), and the
+            // numbered mouse illustrations taking the remaining width.
+            let avail_w = ui.available_width();
+            let gap = ui.spacing().item_spacing.x.max(10.0);
+            let combo_w = 290.0f32;
+            let img_w = (avail_w - 2.0 * combo_w - 2.0 * gap).clamp(220.0, 560.0);
+            let block_w = 2.0 * combo_w + img_w + 2.0 * gap;
+            let pad = ((avail_w - block_w) / 2.0).max(0.0);
 
-                let top_tex =
-                    Self::mouse_texture(&mut self.tex_nyth_top, ui.ctx(), "nyth_top", NYTH_TOP_PNG);
-                let side_tex = Self::mouse_texture(
-                    &mut self.tex_nyth_side,
-                    ui.ctx(),
-                    "nyth_side",
-                    NYTH_SIDE_PNG,
-                );
+            let top_tex =
+                Self::mouse_texture(&mut self.tex_nyth_top, ui.ctx(), "nyth_top", NYTH_TOP_PNG);
+            let side_tex = Self::mouse_texture(
+                &mut self.tex_nyth_side,
+                ui.ctx(),
+                "nyth_side",
+                NYTH_SIDE_PNG,
+            );
 
-                let mut main_card_h = 0.0f32;
-                let mut side_card_h = 0.0f32;
+            let mut main_card_h = 0.0f32;
+            let mut side_card_h = 0.0f32;
 
-                ui.horizontal(|ui| {
-                    ui.add_space(pad);
+            ui.horizontal(|ui| {
+                ui.add_space(pad);
 
-                    // ── Column 1: Standard layer ────────────────
-                    ui.vertical(|ui| {
-                        ui.set_width(combo_w);
-                        main_card_h = crate::theme::card(ui, "Standard — Main buttons", |ui| {
-                            self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
-                        })
-                        .response
-                        .rect
-                        .height();
-                        ui.add_space(6.0);
-                        side_card_h = crate::theme::card(ui, "Standard — Side buttons", |ui| {
-                            self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
-                        })
-                        .response
-                        .rect
-                        .height();
+                // ── Column 1: Standard layer ────────────────
+                ui.vertical(|ui| {
+                    ui.set_width(combo_w);
+                    main_card_h = crate::theme::card(ui, "Standard — Main buttons", |ui| {
+                        self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
+                    })
+                    .response
+                    .rect
+                    .height();
+                    ui.add_space(6.0);
+                    side_card_h = crate::theme::card(ui, "Standard — Side buttons", |ui| {
+                        self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
+                    })
+                    .response
+                    .rect
+                    .height();
+                });
+
+                ui.add_space(gap);
+
+                // ── Column 2: EasyShift layer ───────────────
+                ui.vertical(|ui| {
+                    ui.set_width(combo_w);
+                    crate::theme::card(ui, "EasyShift — Main buttons", |ui| {
+                        self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
                     });
-
-                    ui.add_space(gap);
-
-                    // ── Column 2: EasyShift layer ───────────────
-                    ui.vertical(|ui| {
-                        ui.set_width(combo_w);
-                        crate::theme::card(ui, "EasyShift — Main buttons", |ui| {
-                            self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
-                        });
-                        ui.add_space(6.0);
-                        crate::theme::card(ui, "EasyShift — Side buttons", |ui| {
-                            self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
-                        });
-                    });
-
-                    ui.add_space(gap);
-
-                    // ── Column 3: numbered mouse illustrations ──
-                    // The side illustration lines up with its card; the top
-                    // mouse gets a bigger budget — 25% more than its card,
-                    // or whatever height the image column has left after
-                    // the side image in a taller window — so its numbers
-                    // read clearly and it grows/shrinks with the window.
-                    ui.vertical(|ui| {
-                        ui.set_width(img_w);
-                        let top_h =
-                            (ui.available_height() - side_card_h - 12.0).max(main_card_h * 1.25);
-                        Self::mouse_illustration(ui, top_tex.as_ref(), top_h);
-                        ui.add_space(6.0);
-                        Self::mouse_illustration(ui, side_tex.as_ref(), side_card_h);
+                    ui.add_space(6.0);
+                    crate::theme::card(ui, "EasyShift — Side buttons", |ui| {
+                        self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
                     });
                 });
+
+                ui.add_space(gap);
+
+                // ── Column 3: numbered mouse illustrations ──
+                // Top mouse: 25% more height than the card beside it
+                // (fixed — its numbers are the tab's legend). Side
+                // keypad: capped at 0.75× natural size, the point where
+                // it matched the cards' proportions best.
+                ui.vertical(|ui| {
+                    ui.set_width(img_w);
+                    Self::mouse_illustration(ui, top_tex.as_ref(), main_card_h * 1.25, 1.0);
+                    ui.add_space(6.0);
+                    Self::mouse_illustration(ui, side_tex.as_ref(), side_card_h, 0.75);
+                });
             });
+        }
 
         ui.add_space(4.0);
         ui.separator();
