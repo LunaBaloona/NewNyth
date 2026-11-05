@@ -20,6 +20,10 @@
 *.tar.xz
 *.src.tar.gz
 
+# Release packaging outputs (dist/) and CI staging
+/dist/
+/artifacts/
+
 # Python artefacts
 __pycache__/
 *.pyc
