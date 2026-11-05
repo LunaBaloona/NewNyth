@@ -1,0 +1,32 @@
+#!/bin/sh
+# postinst for the newnyth Debian/Ubuntu package
+set -e
+
+GROUP="roccat"
+
+# Create the device-access group (mirrors PKGBUILD post_install).
+if ! getent group "$GROUP" >/dev/null 2>&1; then
+    addgroup --system "$GROUP" 2>/dev/null || groupadd -f "$GROUP"
+fi
+
+# Activate the shipped udev rule.
+if command -v udevadm >/dev/null 2>&1; then
+    udevadm control --reload-rules || true
+    udevadm trigger || true
+fi
+
+# Refresh the icon cache (desktop/database updates run via dpkg triggers).
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+if [ "$1" = configure ]; then
+    echo ">>> IMPORTANT: give your user device access:"
+    echo ">>>   sudo usermod -aG roccat \$USER"
+    echo ">>> then log out and back in."
+    echo ""
+    echo ">>> Start the event daemon:"
+    echo ">>>   systemctl --user enable --now nythd"
+fi
+
+exit 0
