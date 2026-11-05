@@ -26,7 +26,7 @@ const CANVAS: egui::Color32 = egui::Color32::from_rgb(0x12, 0x13, 0x14);
 const CONTROL: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2e, 0x33);
 const CONTROL_HOVER: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x40, 0x46);
 /// Hairline borders between surfaces.
-const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
+pub const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
 const TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe8, 0xe8);
 /// Normal-state interactive colour — button/combo text, check marks
 /// and the resting scrollbar handle (egui paints the handle with

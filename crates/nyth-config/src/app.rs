@@ -7,6 +7,11 @@ use roccat_nyth_hid::protocol::*;
 
 use crate::state::{hid_key_name, DeviceState, ASSIGNABLE_BUTTON_TYPES, HID_KEYS};
 
+/// Roccat's product photos with the button numbering baked in, used on the
+/// Buttons tab. Cropped from the store imagery (see ROADMAP for the source).
+const NYTH_TOP_PNG: &[u8] = include_bytes!("../../../assets/images/nyth_top.png");
+const NYTH_SIDE_PNG: &[u8] = include_bytes!("../../../assets/images/nyth_side.png");
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Section {
     Settings,
@@ -34,6 +39,9 @@ pub struct NythConfigApp {
     capturing_for: Option<(u8, usize)>,
     /// Last time the active-profile byte was re-read (indicator refresh poll).
     last_profile_poll: std::time::Instant,
+    /// Mouse photos for the Buttons tab, decoded lazily on first visit.
+    tex_nyth_top: Option<egui::TextureHandle>,
+    tex_nyth_side: Option<egui::TextureHandle>,
 }
 
 impl NythConfigApp {
@@ -62,7 +70,55 @@ impl NythConfigApp {
             autoswitch_dirty: false,
             capturing_for: None,
             last_profile_poll: std::time::Instant::now(),
+            tex_nyth_top: None,
+            tex_nyth_side: None,
         }
+    }
+
+    /// Decode one of the embedded mouse photos into a texture (once).
+    fn mouse_texture(
+        cache: &mut Option<egui::TextureHandle>,
+        ctx: &egui::Context,
+        name: &str,
+        png: &[u8],
+    ) -> Option<egui::TextureHandle> {
+        if cache.is_none() {
+            let rgba = image::load_from_memory(png).ok()?.into_rgba8();
+            let color_img = egui::ColorImage::from_rgba_unmultiplied(
+                [rgba.width() as usize, rgba.height() as usize],
+                rgba.as_raw(),
+            );
+            *cache = Some(ctx.load_texture(name, color_img, egui::TextureOptions::LINEAR));
+        }
+        cache.clone()
+    }
+
+    /// Paint a mouse photo aspect-fitted into `max_h` of the column, centred.
+    fn mouse_photo(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>, max_h: f32) {
+        let Some(tex) = tex else { return };
+        let avail_w = ui.available_width();
+        let size = tex.size_vec2();
+        let scale = (avail_w / size.x).min(max_h / size.y).min(1.0);
+        let img_size = size * scale;
+        let frame =
+            egui::Rect::from_min_size(ui.cursor().min, egui::vec2(avail_w, max_h.max(img_size.y)));
+        ui.advance_cursor_after_rect(frame);
+        let rect = egui::Rect::from_center_size(frame.center(), img_size);
+        let pad = 1.0;
+        ui.painter()
+            .rect_filled(rect.expand(pad), 4.0, egui::Color32::from_gray(0xEF));
+        ui.painter().image(
+            tex.id(),
+            rect,
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            egui::Color32::WHITE,
+        );
+        ui.painter().rect_stroke(
+            rect.expand(pad),
+            4.0,
+            egui::Stroke::new(1.0, crate::theme::EDGE),
+            egui::StrokeKind::Outside,
+        );
     }
 
     fn set_status(&mut self, msg: impl Into<String>, ctx: &egui::Context) {
@@ -891,34 +947,57 @@ impl NythConfigApp {
         egui::ScrollArea::vertical()
             .max_height(ui.available_height() - 120.0)
             .show(ui, |ui| {
-                // Centre the quadrant block. When the mouse illustration lands
-                // (v0.9.2) it will take the side space this frees up.
+                // Three columns: Standard combos, EasyShift combos, and the
+                // numbered mouse photos (Roccat's own button numbering).
                 let avail_w = ui.available_width();
-                let block_w = avail_w.min(1000.0);
+                let block_w = avail_w.min(1400.0);
                 let pad = ((avail_w - block_w) / 2.0).max(0.0);
+
+                let top_tex =
+                    Self::mouse_texture(&mut self.tex_nyth_top, ui.ctx(), "nyth_top", NYTH_TOP_PNG);
+                let side_tex = Self::mouse_texture(
+                    &mut self.tex_nyth_side,
+                    ui.ctx(),
+                    "nyth_side",
+                    NYTH_SIDE_PNG,
+                );
+
                 ui.horizontal(|ui| {
                     ui.add_space(pad);
-                    ui.vertical(|ui| {
-                        ui.set_width(block_w);
-                        ui.columns(2, |cols| {
-                            // ── Left column: Standard layer ─────
+                    ui.columns(3, |cols| {
+                        // ── Column 1: Standard layer ────────────
+                        let main_card =
                             crate::theme::card(&mut cols[0], "Standard — Main buttons", |ui| {
                                 self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
                             });
-                            cols[0].add_space(6.0);
+                        cols[0].add_space(6.0);
+                        let side_card =
                             crate::theme::card(&mut cols[0], "Standard — Side buttons", |ui| {
                                 self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
                             });
 
-                            // ── Right column: EasyShift layer ───
-                            crate::theme::card(&mut cols[1], "EasyShift — Main buttons", |ui| {
-                                self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
-                            });
-                            cols[1].add_space(6.0);
-                            crate::theme::card(&mut cols[1], "EasyShift — Side buttons", |ui| {
-                                self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
-                            });
+                        // ── Column 2: EasyShift layer ───────────
+                        crate::theme::card(&mut cols[1], "EasyShift — Main buttons", |ui| {
+                            self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
                         });
+                        cols[1].add_space(6.0);
+                        crate::theme::card(&mut cols[1], "EasyShift — Side buttons", |ui| {
+                            self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
+                        });
+
+                        // ── Column 3: numbered mouse photos ─────
+                        // Each photo lines up with the cards beside it.
+                        Self::mouse_photo(
+                            &mut cols[2],
+                            top_tex.as_ref(),
+                            main_card.response.rect.height(),
+                        );
+                        cols[2].add_space(6.0);
+                        Self::mouse_photo(
+                            &mut cols[2],
+                            side_tex.as_ref(),
+                            side_card.response.rect.height(),
+                        );
                     });
                 });
             });
