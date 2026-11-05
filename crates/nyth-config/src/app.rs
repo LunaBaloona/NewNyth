@@ -7,8 +7,8 @@ use roccat_nyth_hid::protocol::*;
 
 use crate::state::{hid_key_name, DeviceState, ASSIGNABLE_BUTTON_TYPES, HID_KEYS};
 
-/// Roccat's product photos with the button numbering baked in, used on the
-/// Buttons tab. Cropped from the store imagery (see ROADMAP for the source).
+/// Flat-vector Nyth illustrations with the button numbering baked in, used
+/// on the Buttons tab. Rendered in-repo (not Roccat artwork; see ROADMAP).
 const NYTH_TOP_PNG: &[u8] = include_bytes!("../../../assets/images/nyth_top.png");
 const NYTH_SIDE_PNG: &[u8] = include_bytes!("../../../assets/images/nyth_side.png");
 
@@ -39,7 +39,7 @@ pub struct NythConfigApp {
     capturing_for: Option<(u8, usize)>,
     /// Last time the active-profile byte was re-read (indicator refresh poll).
     last_profile_poll: std::time::Instant,
-    /// Mouse photos for the Buttons tab, decoded lazily on first visit.
+    /// Mouse illustrations for the Buttons tab, decoded lazily on first visit.
     tex_nyth_top: Option<egui::TextureHandle>,
     tex_nyth_side: Option<egui::TextureHandle>,
 }
@@ -75,7 +75,7 @@ impl NythConfigApp {
         }
     }
 
-    /// Decode one of the embedded mouse photos into a texture (once).
+    /// Decode one of the embedded mouse illustrations into a texture (once).
     fn mouse_texture(
         cache: &mut Option<egui::TextureHandle>,
         ctx: &egui::Context,
@@ -93,8 +93,8 @@ impl NythConfigApp {
         cache.clone()
     }
 
-    /// Paint a mouse photo aspect-fitted into `max_h` of the column, centred.
-    fn mouse_photo(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>, max_h: f32) {
+    /// Paint a mouse illustration aspect-fitted into `max_h` of the column, centred.
+    fn mouse_illustration(ui: &mut egui::Ui, tex: Option<&egui::TextureHandle>, max_h: f32) {
         let Some(tex) = tex else { return };
         let avail_w = ui.available_width();
         let size = tex.size_vec2();
@@ -949,7 +949,7 @@ impl NythConfigApp {
             .show(ui, |ui| {
                 // Three columns sized to their content: Standard combos,
                 // EasyShift combos (each hugging the dropdowns), and the
-                // numbered mouse photos taking the remaining width.
+                // numbered mouse illustrations taking the remaining width.
                 let avail_w = ui.available_width();
                 let gap = ui.spacing().item_spacing.x.max(10.0);
                 let combo_w = 290.0f32;
@@ -1006,13 +1006,13 @@ impl NythConfigApp {
 
                     ui.add_space(gap);
 
-                    // ── Column 3: numbered mouse photos ─────────
-                    // Each photo lines up with the cards beside it.
+                    // ── Column 3: numbered mouse illustrations ──
+                    // Each illustration lines up with the cards beside it.
                     ui.vertical(|ui| {
                         ui.set_width(img_w);
-                        Self::mouse_photo(ui, top_tex.as_ref(), main_card_h);
+                        Self::mouse_illustration(ui, top_tex.as_ref(), main_card_h);
                         ui.add_space(6.0);
-                        Self::mouse_photo(ui, side_tex.as_ref(), side_card_h);
+                        Self::mouse_illustration(ui, side_tex.as_ref(), side_card_h);
                     });
                 });
             });
