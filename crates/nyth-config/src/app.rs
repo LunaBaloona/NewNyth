@@ -962,9 +962,14 @@ impl NythConfigApp {
             // numbered mouse illustrations taking the remaining width.
             let avail_w = ui.available_width();
             let gap = ui.spacing().item_spacing.x.max(10.0);
+            // `ui.horizontal` inserts its own item spacing between the
+            // columns on top of the explicit gaps; if the block is even a
+            // few points wider than the viewport, egui shrinks the outer
+            // scrollbar to a sliver, so account for every point here.
+            let junction = gap + ui.spacing().item_spacing.x;
             let combo_w = 290.0f32;
-            let img_w = (avail_w - 2.0 * combo_w - 2.0 * gap).clamp(220.0, 560.0);
-            let block_w = 2.0 * combo_w + img_w + 2.0 * gap;
+            let img_w = (avail_w - 2.0 * combo_w - 2.0 * junction - 2.0).clamp(220.0, 560.0);
+            let block_w = 2.0 * combo_w + img_w + 2.0 * junction;
             let pad = ((avail_w - block_w) / 2.0).max(0.0);
 
             let top_tex =
@@ -1019,13 +1024,14 @@ impl NythConfigApp {
                 // ── Column 3: numbered mouse illustrations ──
                 // Top mouse: 25% more height than the card beside it
                 // (fixed — its numbers are the tab's legend). Side
-                // keypad: capped at 0.75× natural size, the point where
-                // it matched the cards' proportions best.
+                // keypad: capped at 0.55× natural size (~470px wide on
+                // the user's 160% display), the size that reads best
+                // beside the combo cards without dominating them.
                 ui.vertical(|ui| {
                     ui.set_width(img_w);
                     Self::mouse_illustration(ui, top_tex.as_ref(), main_card_h * 1.25, 1.0);
                     ui.add_space(6.0);
-                    Self::mouse_illustration(ui, side_tex.as_ref(), side_card_h, 0.75);
+                    Self::mouse_illustration(ui, side_tex.as_ref(), side_card_h, 0.55);
                 });
             });
         }
