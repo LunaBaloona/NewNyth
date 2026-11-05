@@ -1,0 +1,69 @@
+name: Release
+
+# Pushing a vX.Y.Z tag builds the release binaries and ships every
+# distribution channel as GitHub Release assets:
+#   newnyth-<v>-x86_64-linux.tar.gz   (tarball + install-prebuilt.sh)
+#   newnyth_<v>-1_amd64.deb           (Debian 13 / Ubuntu 24.04+)
+#   newnyth-<v>-1.fc-style.x86_64.rpm (Fedora / RHEL / openSUSE)
+#   SHA256SUMS.txt
+# Arch stays on its own channel: the tagged checkout is what makepkg /
+# (future) AUR builds from — no prebuilt binary needed there.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # create the release + upload assets
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04   # glibc 2.39 baseline for all artifacts
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libdbus-1-dev \
+            pkg-config \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libx11-dev \
+            libfontconfig1-dev \
+            mesa-common-dev \
+            rpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binaries
+        run: cargo build --release --all --locked
+
+      - name: Package (tarball + deb + rpm)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          packaging/make-packages.sh "$VERSION"
+          # Release assets live outside the repo's dist/ staging
+          mkdir -p artifacts && mv dist/*.tar.gz dist/*.deb dist/*.rpm dist/SHA256SUMS.txt artifacts/
+
+      - name: Create release and upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # If a (draft) release for this tag already exists — e.g. notes were
+          # written by hand first — just refresh its assets. Otherwise create
+          # it with auto-generated notes; edit or replace the text on GitHub
+          # before publishing the draft, or drop --draft below to ship at once.
+          if gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=true 2>/dev/null; then
+            echo "Release for $GITHUB_REF_NAME exists — refreshing draft state for asset upload"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "NewNyth v$VERSION" \
+              --generate-notes \
+              --draft
+          fi
+          gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber

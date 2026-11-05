@@ -59,9 +59,42 @@ Note that because I started this for my own use, it's built for use on KDE and W
 ![NewNyth Mini profile switcher](docs/screenshots/NewNyth_Mini.png)
 
 
-## Installation (Arch Linux)
+## Installation
 
-### First, the Prerequisites
+Pick whatever matches your distro — everything ships the same four programs
+and sets up the udev rule, `roccat` group, systemd user service and launcher
+entries.
+
+### Prebuilt binaries (any x86_64 distro with glibc ≥ 2.39)
+
+Grab the asset for your distro from the
+[latest release](https://github.com/LunaBaloona/NewNyth/releases/latest), or
+download the tarball and run its installer:
+
+```bash
+# Debian / Ubuntu (Debian 13+, Ubuntu 24.04+)
+sudo apt install ./newnyth_*_amd64.deb
+
+# Fedora / RHEL / openSUSE
+sudo dnf install ./newnyth-*.x86_64.rpm
+
+# Anything else x86_64: self-contained tarball
+tar xzf newnyth-*-x86_64-linux.tar.gz
+cd newnyth-*-x86_64-linux
+./install-prebuilt.sh
+```
+
+Then, whichever route you used:
+
+```bash
+sudo usermod -aG roccat $USER   # log out and back in afterwards
+systemctl --user enable --now nythd
+newnyth
+```
+
+### Arch Linux
+
+#### First, the Prerequisites
 
 ```bash
 # Build tools
@@ -82,7 +115,7 @@ sudo usermod -aG roccat $USER
 # Log out and back in for group membership to take effect
 ```
 
-### Next, build and install
+#### Next, build and install
 
 ```bash
 git clone https://github.com/LunaBaloona/NewNyth.git
@@ -96,7 +129,7 @@ Alternative manual install is also included (for those without Arch or prefer no
 ./install.sh
 ```
 
-### After installation
+#### After installation
 
 ```bash
 # Start the background daemon
@@ -108,6 +141,19 @@ newnyth
 # Or the mini-Gui, which is just a profile switcher
 newnyth-mini
 ```
+
+### Staying up to date
+
+| Channel | Update with |
+|---------|-------------|
+| `.deb` | download + `sudo apt install ./newnyth_*_amd64.deb` (no repo yet) |
+| `.rpm` | download + `sudo dnf upgrade ./newnyth-*.x86_64.rpm` (no repo yet) |
+| tarball | download + re-run `./install-prebuilt.sh` |
+| Arch `makepkg` | `git pull` in the checkout, then `makepkg -si` |
+| `install.sh` | `git pull`, then `./install.sh` again |
+
+> An AUR package (`yay -S newnyth`) and distro package repos are planned —
+> track progress in the [issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
 
 ## Components
 
@@ -201,18 +247,24 @@ All stored under `~/.config/newnyth/`:
 NewNyth/
 ├── Cargo.toml                     # Workspace root
 ├── PKGBUILD                       # Arch Linux package
-├── install.sh                     # Manual install script
+├── install.sh                     # Manual install script (builds from source)
 ├── LICENSE                        # GPL-2.0
 ├── NOTICE                         # Attribution
 ├── README.md
 ├── assets/
 │   └── newnyth.png                # Application icon
+├── packaging/
+│   ├── make-packages.sh           # Builds tarball + deb + rpm from a release build
+│   ├── debian/                    # deb control + maintainer scripts
+│   ├── rpm/newnyth.spec           # RPM spec (prebuilt-binary layout)
+│   └── install-prebuilt.sh        # Installer shipped inside the release tarball
 ├── udev/
 │   └── 90-roccat-nyth.rules       # Device permissions
 ├── systemd/
 │   └── nythd.service              # Systemd user service
 ├── .github/
 │   ├── workflows/build.yml        # CI pipeline
+│   ├── workflows/release.yml      # Tag → GitHub Release (tarball + deb + rpm)
 │   └── ISSUE_TEMPLATE/            # Bug report, feature request
 └── crates/
     ├── roccat-nyth-hid/           # Low-level HID protocol and ioctl
