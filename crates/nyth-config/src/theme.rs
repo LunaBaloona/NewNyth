@@ -27,6 +27,10 @@ const CONTROL: egui::Color32 = egui::Color32::from_rgb(0x2a, 0x2e, 0x33);
 const CONTROL_HOVER: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x40, 0x46);
 /// Hairline borders between surfaces.
 pub const EDGE: egui::Color32 = egui::Color32::from_rgb(0x3a, 0x3f, 0x44);
+/// Inset backing behind the mouse illustrations on the Buttons tab: the
+/// artwork is transparent-background vector art and sits in a canvas-dark
+/// well (the old light "photo card" glare fought the dark theme).
+pub const ILLU_BG: egui::Color32 = CANVAS;
 const TEXT: egui::Color32 = egui::Color32::from_rgb(0xe8, 0xe8, 0xe8);
 /// Normal-state interactive colour — button/combo text, check marks
 /// and the resting scrollbar handle (egui paints the handle with

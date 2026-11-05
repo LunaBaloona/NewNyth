@@ -106,7 +106,7 @@ impl NythConfigApp {
         let rect = egui::Rect::from_center_size(frame.center(), img_size);
         let pad = 1.0;
         ui.painter()
-            .rect_filled(rect.expand(pad), 4.0, egui::Color32::from_gray(0xEF));
+            .rect_filled(rect.expand(pad), 4.0, crate::theme::ILLU_BG);
         ui.painter().image(
             tex.id(),
             rect,
@@ -1388,16 +1388,28 @@ impl NythConfigApp {
         let avail_w = ui.available_width();
         let num_cols = (((avail_w + gap) / (min_card_w + gap)).floor() as usize)
             .clamp(1, NYTH_PROFILE_NUM as usize);
-        let per_col = (NYTH_PROFILE_NUM as usize).div_ceil(num_cols);
 
         egui::ScrollArea::vertical()
             .id_salt("autoswitch_main_scroll")
             .show(ui, |ui| {
-                ui.columns(num_cols, |cols| {
-                    for (col_idx, col) in cols.iter_mut().enumerate() {
-                        let start = col_idx * per_col;
-                        let end = (start + per_col).min(NYTH_PROFILE_NUM as usize);
-                        for p in start..end {
+                // Row-major flow: 1 2 3 across the top, 4 5 (… 6) below.
+                // Each card stretches to fill an equal-width cell of its row.
+                let rows = (NYTH_PROFILE_NUM as usize).div_ceil(num_cols);
+                for row in 0..rows {
+                    ui.horizontal(|ui| {
+                        // Explicit `add_space` gaps keep the cells exactly
+                        // `gap` apart without double-counting item spacing.
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        let cell_w =
+                            (ui.available_width() - (num_cols - 1) as f32 * gap) / num_cols as f32;
+                        for col in 0..num_cols {
+                            let p = row * num_cols + col;
+                            if p >= NYTH_PROFILE_NUM as usize {
+                                break;
+                            }
+                            if col > 0 {
+                                ui.add_space(gap);
+                            }
                             let profile_idx = p as u8;
                             let is_default =
                                 self.state.autoswitch.default_profile == Some(profile_idx);
@@ -1409,8 +1421,10 @@ impl NythConfigApp {
                             // parks the desired change for after the card.
                             let mut new_default: Option<Option<u8>> = None;
 
-                            crate::theme::card_with_actions(
-                                col,
+                            ui.vertical(|ui| {
+                                ui.set_width(cell_w);
+                                crate::theme::card_with_actions(
+                                    ui,
                                 &format!("Mouse Profile {}", profile_idx + 1),
                                 &mut |ui| {
                                     let mut def = is_default;
@@ -1512,16 +1526,17 @@ impl NythConfigApp {
                                         }
                                     }
                                 },
-                            );
+                                );
+                            });
 
                             if let Some(nd) = new_default {
                                 self.state.autoswitch.default_profile = nd;
                                 self.autoswitch_dirty = true;
                             }
-                            col.add_space(8.0);
                         }
-                    }
-                });
+                    });
+                    ui.add_space(8.0);
+                }
             });
     }
 
