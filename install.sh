@@ -5,6 +5,23 @@ echo "=== NewNyth Installer==="
 echo "https://github.com/LunaBaloona/NewNyth"
 echo ""
 
+# Don't fight an installed package manager — updates would silently diverge.
+if command -v pacman >/dev/null 2>&1 && pacman -Q newnyth >/dev/null 2>&1; then
+    echo "Error: newnyth is installed via pacman. Update it with your package manager"
+    echo "(e.g. 'yay -Syu newnyth' for AUR) instead of running this script."
+    exit 1
+fi
+if command -v dpkg-query >/dev/null 2>&1 && dpkg-query -W newnyth >/dev/null 2>&1; then
+    echo "Error: newnyth is installed via dpkg/apt. Update it with 'apt install --only-upgrade newnyth'"
+    echo "or reinstall the newest .deb from the GitHub Releases page instead."
+    exit 1
+fi
+if command -v rpm >/dev/null 2>&1 && rpm -q newnyth >/dev/null 2>&1; then
+    echo "Error: newnyth is installed via rpm. Update it with 'dnf upgrade newnyth' (or reinstall"
+    echo "the newest .rpm from the GitHub Releases page) instead of running this script."
+    exit 1
+fi
+
 # Check for Rust
 if ! command -v cargo &>/dev/null; then
     echo "Error: Rust/Cargo not found. Install with: sudo pacman -S rust"
