@@ -483,7 +483,7 @@ impl NythConfigApp {
         };
         let settings = unsafe { &mut *settings };
 
-        ui.heading(format!("Profile {} — Settings", self.selected_profile + 1));
+        ui.heading(format!("Profile {}: Settings", self.selected_profile + 1));
         ui.add_space(8.0);
 
         // Single stacked column, contents centred (Swarm keeps Settings
@@ -587,7 +587,7 @@ impl NythConfigApp {
                 if settings.advanced_sensitivity != 0 {
                     ui.label(
                         egui::RichText::new(
-                            "Separate axes are enabled — set X and Y on the Advanced tab.",
+                            "Separate axes are enabled - set X and Y on the Advanced tab.",
                         )
                         .small()
                         .weak(),
@@ -612,7 +612,7 @@ impl NythConfigApp {
         };
         let settings = unsafe { &mut *settings };
 
-        ui.heading(format!("Profile {} — Advanced", self.selected_profile + 1));
+        ui.heading(format!("Profile {}: Advanced", self.selected_profile + 1));
         ui.add_space(8.0);
 
         // ── Per-profile: split-axis sensitivity ──────────────────────
@@ -817,7 +817,7 @@ impl NythConfigApp {
         };
         let settings = unsafe { &mut *settings };
 
-        ui.heading(format!("Profile {} — Lighting", self.selected_profile + 1));
+        ui.heading(format!("Profile {}: Lighting", self.selected_profile + 1));
         ui.add_space(8.0);
 
         let mut enabled = (settings.lights_enabled & 0x03) == 3;
@@ -944,7 +944,7 @@ impl NythConfigApp {
     // ─── Buttons panel (v0.7.1: 4-quadrant layout) ──────────
 
     fn ui_buttons(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
-        ui.heading(format!("Profile {} — Buttons", self.selected_profile + 1));
+        ui.heading(format!("Profile {}: Buttons", self.selected_profile + 1));
         ui.add_space(4.0);
         ui.label(egui::RichText::new("Select a button to configure. Shortcut and Open application have additional options below.").weak().italics());
         ui.add_space(8.0);
@@ -1001,14 +1001,14 @@ impl NythConfigApp {
                 // ── Column 1: Standard layer ────────────────
                 ui.vertical(|ui| {
                     ui.set_width(combo_w);
-                    main_card_h = crate::theme::card(ui, "Standard — Main buttons", |ui| {
+                    main_card_h = crate::theme::card(ui, "Standard | Main buttons", |ui| {
                         self.button_grid(ui, buttons, 0..8, "btn_std_main", 0, true);
                     })
                     .response
                     .rect
                     .height();
                     ui.add_space(6.0);
-                    side_card_h = crate::theme::card(ui, "Standard — Side buttons", |ui| {
+                    side_card_h = crate::theme::card(ui, "Standard | Side buttons", |ui| {
                         self.button_grid(ui, buttons, 8..20, "btn_std_side", 4, false);
                     })
                     .response
@@ -1021,11 +1021,11 @@ impl NythConfigApp {
                 // ── Column 2: EasyShift layer ───────────────
                 ui.vertical(|ui| {
                     ui.set_width(combo_w);
-                    crate::theme::card(ui, "EasyShift — Main buttons", |ui| {
+                    crate::theme::card(ui, "EasyShift | Main buttons", |ui| {
                         self.button_grid(ui, buttons, 20..28, "btn_es_main", 0, true);
                     });
                     ui.add_space(6.0);
-                    crate::theme::card(ui, "EasyShift — Side buttons", |ui| {
+                    crate::theme::card(ui, "EasyShift | Side buttons", |ui| {
                         self.button_grid(ui, buttons, 28..40, "btn_es_side", 4, false);
                     });
                 });
@@ -1620,7 +1620,7 @@ impl NythConfigApp {
                             Err(e) => {
                                 log::warn!("Saved, but could not notify daemon: {}", e);
                                 self.set_status(
-                                    "Saved — daemon unreachable, it will reload the file shortly",
+                                    "Saved - daemon unreachable, it will reload the file shortly",
                                     ctx,
                                 );
                             }

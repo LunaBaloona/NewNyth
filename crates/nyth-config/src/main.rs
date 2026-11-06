@@ -19,7 +19,7 @@ fn main() -> Result<(), eframe::Error> {
                 return Ok(());
             }
             "--help" | "-h" => {
-                println!("NewNyth — Roccat Nyth Configuration GUI");
+                println!("NewNyth - Roccat Nyth Configuration GUI");
                 println!();
                 println!("Usage: newnyth [OPTIONS]");
                 println!();
@@ -40,7 +40,7 @@ fn main() -> Result<(), eframe::Error> {
     env_logger::init();
 
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("NewNyth — Roccat Nyth Configuration")
+        .with_title("NewNyth - Roccat Nyth Configuration")
         .with_inner_size([960.0, 560.0])
         .with_min_inner_size([800.0, 480.0]);
 

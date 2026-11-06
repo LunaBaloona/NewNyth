@@ -43,7 +43,7 @@ fn main() {
     }
 
     if show_help {
-        println!("nythd — NewNyth event daemon for the Roccat Nyth mouse");
+        println!("nythd - NewNyth event daemon for the Roccat Nyth mouse");
         println!();
         println!("Usage: nythd [OPTIONS]");
         println!();
@@ -157,7 +157,7 @@ fn acquire_instance_lock(lock_path: &Path) -> Result<std::fs::File, String> {
     if rc != 0 {
         return Err(format!(
             "Another nythd instance is already running (lock held via {}; \
-             running duplicate daemons makes every button press fire twice) — \
+             running duplicate daemons makes every button press fire twice) - \
              find it with 'pgrep -af nythd', stop it (e.g. 'systemctl --user stop nythd' \
              or 'pkill -x nythd') before starting another",
             lock_path.display()
@@ -327,7 +327,7 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
             openers = roccat_nyth_profile::config::OpenersConfig::load();
             autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
             log::info!(
-                "Config files changed — reloaded (auto-switch: {})",
+                "Config files changed - reloaded (auto-switch: {})",
                 if autoswitch.enabled {
                     "enabled"
                 } else {
@@ -493,7 +493,7 @@ fn handle_event(
                 }
             } else {
                 log::info!(
-                    "Open application for button {} — no command configured (profile {})",
+                    "Open application for button {} - no command configured (profile {})",
                     button_index,
                     *current_profile + 1
                 );

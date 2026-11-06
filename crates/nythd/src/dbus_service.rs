@@ -135,7 +135,7 @@ impl NythDbusServer {
 
             // ── StartCapture (legacy — handled via capture_request.txt) ─
             b.method("StartCapture", (), (), move |_, _, _: ()| {
-                log::trace!("D-Bus: StartCapture — handled via file");
+                log::trace!("D-Bus: StartCapture - handled via file");
                 Ok(())
             });
         });
