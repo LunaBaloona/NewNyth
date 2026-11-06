@@ -1,4 +1,4 @@
-# NewNyth — prebuilt binaries (x86_64 Linux)
+# NewNyth - prebuilt binaries (x86_64 Linux)
 
 Linux driver, daemon, CLI and GUI for the Roccat Nyth mouse.
 
