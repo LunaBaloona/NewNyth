@@ -11,7 +11,7 @@ members = [
 
 [workspace.package]
 version = "0.9.2"
-edition = "2021"
+edition = "2024"
 # image 0.25 requires 1.88; clap 4.6 requires 1.85.
 rust-version = "1.95"
 license = "GPL-2.0-or-later"

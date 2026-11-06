@@ -5,7 +5,7 @@ use eframe::egui;
 use roccat_nyth_hid::display;
 use roccat_nyth_hid::protocol::*;
 
-use crate::state::{hid_key_name, DeviceState, ASSIGNABLE_BUTTON_TYPES, HID_KEYS};
+use crate::state::{ASSIGNABLE_BUTTON_TYPES, DeviceState, HID_KEYS, hid_key_name};
 
 /// Flat-vector Nyth illustrations with the button numbering baked in, used
 /// on the Buttons tab. Rendered in-repo (not Roccat artwork; see ROADMAP).
@@ -371,10 +371,10 @@ impl eframe::App for NythConfigApp {
 
                 // Transient status messages, right-aligned.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if let Some((ref msg, ts)) = self.status_message {
-                        if ui.input(|i| i.time) - ts < 5.0 {
-                            ui.label(egui::RichText::new(msg).weak().italics());
-                        }
+                    if let Some((ref msg, ts)) = self.status_message
+                        && ui.input(|i| i.time) - ts < 5.0
+                    {
+                        ui.label(egui::RichText::new(msg).weak().italics());
                     }
                 });
             });

@@ -93,12 +93,11 @@ enum DriverAction {
 fn main() {
     let cli = Cli::parse();
 
-    if cli.verbose {
-        std::env::set_var("RUST_LOG", "trace");
-    } else if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "error");
-    }
-    env_logger::init();
+    // Edition 2024 made `set_var` unsafe; env_logger applies the RUST_LOG
+    // default itself, so no environment mutation is needed at startup.
+    let default_filter = if cli.verbose { "trace" } else { "error" };
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_filter))
+        .init();
 
     let result = match cli.command {
         None | Some(Command::Status) => cmd_status(),
