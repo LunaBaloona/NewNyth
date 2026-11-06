@@ -129,10 +129,16 @@ Alternative manual install is also included (for those without Arch or prefer no
 ./install.sh
 ```
 
+To remove everything that script installed again, run `./install.sh --uninstall`
+(user config in `~/.config/newnyth` and the `roccat` group are left in place).
+For a complete cleanup, `./install.sh --fulluninstall` (short: `-fu`) also
+deletes that config directory and removes the `roccat` group and your
+membership in it.
+
 #### After installation
 
 ```bash
-# Start the background daemon
+# Start the background daemon (already done for you by ./install.sh)
 systemctl --user enable --now nythd
 
 # Launch the main GUI
@@ -249,7 +255,7 @@ All stored under `~/.config/newnyth/`:
 NewNyth/
 ├── Cargo.toml                     # Workspace root
 ├── PKGBUILD                       # Arch Linux package
-├── install.sh                     # Manual install script (builds from source)
+├── install.sh                     # Manual install/uninstall script (builds from source)
 ├── LICENSE                        # GPL-2.0
 ├── NOTICE                         # Attribution
 ├── README.md
