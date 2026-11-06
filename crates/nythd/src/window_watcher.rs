@@ -218,25 +218,22 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
                 let mut current_app: Option<String> = None;
 
                 // Source 1: file written by KWin script → D-Bus handler.
-                if let Ok(metadata) = std::fs::metadata(&file_path) {
-                    if let Ok(modified) = metadata.modified() {
-                        if modified > last_file_modified {
-                            last_file_modified = modified;
-                            last_file_update = Instant::now();
+                if let Ok(metadata) = std::fs::metadata(&file_path)
+                    && let Ok(modified) = metadata.modified()
+                    && modified > last_file_modified
+                {
+                    last_file_modified = modified;
+                    last_file_update = Instant::now();
 
-                            if !kwin_active {
-                                log::info!(
-                                    "KWin script is active - native Wayland tracking working"
-                                );
-                                kwin_active = true;
-                            }
+                    if !kwin_active {
+                        log::info!("KWin script is active - native Wayland tracking working");
+                        kwin_active = true;
+                    }
 
-                            if let Ok(content) = std::fs::read_to_string(&file_path) {
-                                let app = content.trim().to_string();
-                                if !app.is_empty() {
-                                    current_app = Some(app);
-                                }
-                            }
+                    if let Ok(content) = std::fs::read_to_string(&file_path) {
+                        let app = content.trim().to_string();
+                        if !app.is_empty() {
+                            current_app = Some(app);
                         }
                     }
                 }
@@ -252,21 +249,20 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
                     && has_xdotool
                     && !kwin_active
                     && last_file_update.elapsed() > FILE_STALE_THRESHOLD
+                    && let Some(app) = xdotool_get_class()
                 {
-                    if let Some(app) = xdotool_get_class() {
-                        log::debug!("Active window (xdotool fallback): {app}");
-                        current_app = Some(app);
-                    }
+                    log::debug!("Active window (xdotool fallback): {app}");
+                    current_app = Some(app);
                 }
 
                 // Send if changed.
-                if let Some(app) = current_app {
-                    if app != last_app {
-                        last_app = app.clone();
-                        log::trace!("Active window: {}", last_app);
-                        if tx.send(last_app.clone()).is_err() {
-                            break;
-                        }
+                if let Some(app) = current_app
+                    && app != last_app
+                {
+                    last_app = app.clone();
+                    log::trace!("Active window: {}", last_app);
+                    if tx.send(last_app.clone()).is_err() {
+                        break;
                     }
                 }
             }
