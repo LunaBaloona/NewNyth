@@ -101,7 +101,7 @@ fn try_install_kwin_script() -> bool {
                     return true;
                 }
                 Err(e) => {
-                    log::debug!("run() on Script{} failed: {e} — trying start()", script_id);
+                    log::debug!("run() on Script{} failed: {e} - trying start()", script_id);
                 }
             }
 
@@ -136,7 +136,7 @@ pub fn start_kwin_installer() {
             }
 
             log::info!(
-                "KWin not ready yet — will retry every {}s for up to {}s",
+                "KWin not ready yet - will retry every {}s for up to {}s",
                 KWIN_RETRY_INTERVAL.as_secs(),
                 KWIN_RETRY_TIMEOUT.as_secs()
             );
@@ -226,7 +226,7 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
 
                             if !kwin_active {
                                 log::info!(
-                                    "KWin script is active — native Wayland tracking working"
+                                    "KWin script is active - native Wayland tracking working"
                                 );
                                 kwin_active = true;
                             }

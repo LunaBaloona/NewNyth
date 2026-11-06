@@ -15,7 +15,7 @@ fn main() -> Result<(), eframe::Error> {
                 return Ok(());
             }
             "--help" | "-h" => {
-                println!("NewNyth Mini — Compact profile switcher");
+                println!("NewNyth Mini - Compact profile switcher");
                 println!();
                 println!("Usage: newnyth-mini [OPTIONS]");
                 println!();
