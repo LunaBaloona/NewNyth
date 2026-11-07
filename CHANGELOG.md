@@ -134,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- First tagged release: the `nythd` user daemon and the `newnyth` config
+- First tagged release (on Github): the `nythd` user daemon and the `newnyth` config
   GUI with profile, button, DPI, sensitivity and lighting support, KDE
   Wayland app auto-switch and Arch packaging. Earlier history was not
   tracked in a changelog.
