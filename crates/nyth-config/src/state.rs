@@ -485,3 +485,33 @@ pub fn hid_key_name(key: u8) -> &'static str {
         .map(|(_, name)| *name)
         .unwrap_or("Unknown")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{HID_KEYS, hid_key_name};
+
+    #[test]
+    fn hid_key_names_resolve() {
+        assert_eq!(hid_key_name(0x04), "A");
+        assert_eq!(hid_key_name(0x27), "0");
+        assert_eq!(hid_key_name(0x28), "Enter");
+        assert_eq!(hid_key_name(0x73), "F24");
+    }
+
+    #[test]
+    fn unknown_hid_keys_fall_back() {
+        assert_eq!(hid_key_name(0x00), "(none)");
+        // The reserved gap between Menu (0x65) and F13 (0x68).
+        assert_eq!(hid_key_name(0x66), "Unknown");
+        assert_eq!(hid_key_name(0xFF), "Unknown");
+    }
+
+    #[test]
+    fn hid_key_table_has_no_duplicate_ids() {
+        let mut ids: Vec<u8> = HID_KEYS.iter().map(|(id, _)| *id).collect();
+        let count = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), count, "HID_KEYS contains duplicate usage ids");
+    }
+}
