@@ -63,6 +63,20 @@ enum TcuWizardStage {
     },
 }
 
+/// Open "Keep settings?" revert dialog after a lift-off distance write.
+///
+/// The device applies distance changes immediately, so the dialog owns
+/// the undo: `previous` is written back on Revert, on closing the
+/// window, or when the countdown runs out, mirroring the original
+/// `dcu_changed_cb`.
+struct DcuKeep {
+    /// Setting the dialog asks about (currently applied on the device).
+    applied: DistanceControl,
+    /// Setting written back when the dialog reverts.
+    previous: DistanceControl,
+    started: std::time::Instant,
+}
+
 pub struct NythConfigApp {
     state: DeviceState,
     selected_profile: u8,
@@ -85,6 +99,8 @@ pub struct NythConfigApp {
     capturing_for: Option<(u8, usize)>,
     /// Open TCU surface-calibration wizard (Advanced tab).
     tcu_wizard: Option<TcuWizard>,
+    /// Open DCU keep-or-revert dialog (Advanced tab).
+    dcu_keep: Option<DcuKeep>,
     /// Last time the active-profile byte was re-read (indicator refresh poll).
     last_profile_poll: std::time::Instant,
     /// Mouse illustrations for the Buttons tab, decoded lazily on first visit.
@@ -126,6 +142,7 @@ impl NythConfigApp {
             profile_name_buf,
             capturing_for: None,
             tcu_wizard: None,
+            dcu_keep: None,
             last_profile_poll: std::time::Instant::now(),
             tex_nyth_top: None,
             tex_nyth_side: None,
@@ -527,6 +544,7 @@ impl eframe::App for NythConfigApp {
         // wizard; more may follow). They pump their own timers and
         // early-return when closed.
         self.ui_tcu_wizard(&ctx);
+        self.ui_dcu_keep(&ctx);
     }
 }
 
@@ -835,16 +853,42 @@ impl NythConfigApp {
                             for d in DistanceControl::ALL {
                                 if ui.radio(d == current, Self::dcu_label(d)).clicked()
                                     && d != current
+                                    && self.dcu_keep.is_none()
                                 {
-                                    match self.state.apply_distance_control(d) {
-                                        Ok(()) => {
-                                            self.state.refresh_control_unit();
-                                            self.set_status(
-                                                format!("Lift-off distance: {}", Self::dcu_label(d)),
-                                                ctx,
-                                            );
+                                    // Mirrors the original dcu_changed_cb:
+                                    // live-read the old value, skip when it
+                                    // already matches, write the new one,
+                                    // then hold a keep-or-revert dialog.
+                                    self.state.refresh_control_unit();
+                                    let old = self
+                                        .state
+                                        .control_unit
+                                        .map(|c| DistanceControl::from_u8(c.dcu));
+                                    match old {
+                                        Some(old) if old != d => {
+                                            match self.state.apply_distance_control(d) {
+                                                Ok(()) => {
+                                                    self.state.refresh_control_unit();
+                                                    self.dcu_keep = Some(DcuKeep {
+                                                        applied: d,
+                                                        previous: old,
+                                                        started: std::time::Instant::now(),
+                                                    });
+                                                    self.set_status(
+                                                        format!(
+                                                            "Lift-off distance: {}",
+                                                            Self::dcu_label(d)
+                                                        ),
+                                                        ctx,
+                                                    );
+                                                }
+                                                Err(e) => self.set_status(format!("Error: {e}"), ctx),
+                                            }
                                         }
-                                        Err(e) => self.set_status(format!("Error: {e}"), ctx),
+                                        Some(_) => {}
+                                        None => {
+                                            self.set_status("Could not read the sensor state.", ctx);
+                                        }
                                     }
                                 }
                             }
@@ -1130,6 +1174,88 @@ impl NythConfigApp {
             }
             WizardAction::Close => self.tcu_wizard = None,
             WizardAction::Abandon => self.tcu_abandon(ctx),
+        }
+    }
+
+    // ─── DCU keep-or-revert dialog ────────────────────────────────────
+
+    /// Pump and draw the "Keep settings?" dialog for a lift-off
+    /// distance change, mirroring the original 20 s timeout dialog:
+    /// Revert, closing the window, or simply not answering all restore
+    /// the previous setting.
+    fn ui_dcu_keep(&mut self, ctx: &egui::Context) {
+        let Some(keep) = &self.dcu_keep else {
+            return;
+        };
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        let applied = keep.applied;
+        let previous = keep.previous;
+        let left = countdown_left(keep.started, KEEP_TIMEOUT);
+
+        // Running out of time answers the dialog with "Revert".
+        #[derive(Clone, Copy, PartialEq)]
+        enum Answer {
+            None,
+            Keep,
+            Revert,
+        }
+        let mut action = if left <= 0.0 {
+            Answer::Revert
+        } else {
+            Answer::None
+        };
+        let mut open = true;
+        egui::Window::new("Keep settings?")
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(340.0)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Keep the lift-off distance: {}?",
+                            Self::dcu_label(applied)
+                        ))
+                        .strong(),
+                    );
+                    ui.label(format!(
+                        "Reverting automatically in {:.0} s.",
+                        left.max(0.0)
+                    ));
+                    ui.add_space(12.0);
+                    crate::theme::centered_row(ui, 180.0, |ui| {
+                        if ui.button("Keep").clicked() {
+                            action = Answer::Keep;
+                        }
+                        if ui.button("Revert").clicked() {
+                            action = Answer::Revert;
+                        }
+                    });
+                });
+            });
+        if !open {
+            action = Answer::Revert;
+        }
+
+        match action {
+            Answer::None => {}
+            Answer::Keep => {
+                self.dcu_keep = None;
+                self.set_status("Lift-off distance kept", ctx);
+            }
+            Answer::Revert => {
+                self.dcu_keep = None;
+                let outcome = self.state.apply_distance_control(previous);
+                self.state.refresh_control_unit();
+                match outcome {
+                    Ok(()) => {
+                        self.set_status(format!("Reverted to {}", Self::dcu_label(previous)), ctx);
+                    }
+                    Err(e) => self.set_status(format!("Could not revert: {e}"), ctx),
+                }
+            }
         }
     }
 
