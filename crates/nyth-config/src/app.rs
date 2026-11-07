@@ -21,6 +21,62 @@ pub enum Section {
     AutoSwitch,
 }
 
+/// How long the device may take to finish a surface test. The original
+/// wizard (roccat-tools `nyth_tcu_calibration_assistant.c`) expects the
+/// answer within 8 s and waits 15 s.
+const TCU_TEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// How long the "Keep settings?" dialogs wait before reverting. The
+/// original uses a 20 s timeout dialog for both the calibration keep
+/// question and the lift-off distance keep question.
+const KEEP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Seconds left before `started` passes `total` (never negative).
+fn countdown_left(started: std::time::Instant, total: std::time::Duration) -> f32 {
+    (total.as_secs_f32() - started.elapsed().as_secs_f32()).max(0.0)
+}
+
+/// Modal surface-calibration wizard for the tracking control unit.
+///
+/// The device only switches the TCU on through the Start → event →
+/// Accept handshake, so the wizard drives: intro, testing (waiting for
+/// the calibration event forwarded by the daemon), keep (20 s to
+/// decide), result page. Every exit path sends the pending cancel and
+/// tears the event watch down.
+struct TcuWizard {
+    stage: TcuWizardStage,
+}
+
+enum TcuWizardStage {
+    Intro,
+    /// Waiting for the calibration event; `started` drives the timeout.
+    Testing {
+        started: std::time::Instant,
+    },
+    /// The device answered; `started` drives the keep-or-discard timeout.
+    Keep {
+        started: std::time::Instant,
+    },
+    /// Terminal page shown before the window closes.
+    Done {
+        message: String,
+    },
+}
+
+/// Open "Keep settings?" revert dialog after a lift-off distance write.
+///
+/// The device applies distance changes immediately, so the dialog owns
+/// the undo: `previous` is written back on Revert, on closing the
+/// window, or when the countdown runs out, mirroring the original
+/// `dcu_changed_cb`.
+struct DcuKeep {
+    /// Setting the dialog asks about (currently applied on the device).
+    applied: DistanceControl,
+    /// Setting written back when the dialog reverts.
+    previous: DistanceControl,
+    started: std::time::Instant,
+}
+
 pub struct NythConfigApp {
     state: DeviceState,
     selected_profile: u8,
@@ -35,8 +91,20 @@ pub struct NythConfigApp {
     opener_edit_buf: String,
     // Auto-switch state
     autoswitch_dirty: bool,
+    /// PC-side profile display-name edit buffers, indexed by profile.
+    /// The Nyth has no name field, so these map straight onto
+    /// `state.profile_names` and are saved as soon as they change.
+    profile_name_buf: [String; NYTH_PROFILE_NUM as usize],
     /// When capturing: (profile_index, slot_index) to assign the next captured app to.
     capturing_for: Option<(u8, usize)>,
+    /// Open TCU surface-calibration wizard (Advanced tab).
+    tcu_wizard: Option<TcuWizard>,
+    /// Open DCU keep-or-revert dialog (Advanced tab).
+    dcu_keep: Option<DcuKeep>,
+    /// Auto-switch card whose header name field is open (pencil button).
+    name_editing: Option<u8>,
+    /// Ask the header name field for keyboard focus once it appears.
+    name_edit_focus: bool,
     /// Last time the active-profile byte was re-read (indicator refresh poll).
     last_profile_poll: std::time::Instant,
     /// Mouse illustrations for the Buttons tab, decoded lazily on first visit.
@@ -50,6 +118,13 @@ impl NythConfigApp {
 
         let state = DeviceState::load_from_device();
         let selected = state.active_profile;
+        let profile_name_buf: [String; NYTH_PROFILE_NUM as usize] = std::array::from_fn(|i| {
+            state
+                .profile_names
+                .get(i as u8)
+                .unwrap_or_default()
+                .to_string()
+        });
         let profile = state
             .profiles
             .get(selected as usize)
@@ -68,7 +143,12 @@ impl NythConfigApp {
             selected_button: None,
             opener_edit_buf: String::new(),
             autoswitch_dirty: false,
+            profile_name_buf,
             capturing_for: None,
+            tcu_wizard: None,
+            dcu_keep: None,
+            name_editing: None,
+            name_edit_focus: false,
             last_profile_poll: std::time::Instant::now(),
             tex_nyth_top: None,
             tex_nyth_side: None,
@@ -137,6 +217,13 @@ impl NythConfigApp {
     fn reload_device(&mut self, ctx: &egui::Context) {
         self.state = DeviceState::load_from_device();
         self.load_pending_from_profile();
+        self.profile_name_buf = std::array::from_fn(|i| {
+            self.state
+                .profile_names
+                .get(i as u8)
+                .unwrap_or_default()
+                .to_string()
+        });
         if self.state.connected {
             self.set_status("Device data reloaded", ctx);
         }
@@ -328,7 +415,11 @@ impl eframe::App for NythConfigApp {
                         } else {
                             egui::Button::new(format!("{}", i + 1))
                         };
-                        let r = ui.add_sized([30.0, 26.0], btn);
+                        let tip = match self.state.profile_names.get(i) {
+                            Some(name) => format!("Profile {}: {}", i + 1, name),
+                            None => format!("Profile {}", i + 1),
+                        };
+                        let r = ui.add_sized([30.0, 26.0], btn).on_hover_text(tip);
                         if r.clicked() {
                             self.selected_profile = i;
                         }
@@ -454,6 +545,12 @@ impl eframe::App for NythConfigApp {
                 self.ui_section(ui, &ctx);
             }
         });
+
+        // Modal helper windows on top of the panels (calibration
+        // wizard; more may follow). They pump their own timers and
+        // early-return when closed.
+        self.ui_tcu_wizard(&ctx);
+        self.ui_dcu_keep(&ctx);
     }
 }
 
@@ -706,14 +803,16 @@ impl NythConfigApp {
                             .weak(),
                         );
                         crate::theme::centered_row(ui, 220.0, |ui| {
-                            // The device only ever switches the TCU on via
-                            // the surface-calibration handshake, which
-                            // NewNyth does not drive yet — so "On" is
-                            // display-only and switching off is the write.
-                            ui.add_enabled_ui(false, |ui| {
-                                let _ = ui.radio(on, "On");
-                            });
-                            if ui.radio(!on, "Off").clicked() && on {
+                            // The device only ever switches the TCU on
+                            // through the surface-calibration handshake,
+                            // so selecting "On" opens the wizard and
+                            // "Off" stays the direct write.
+                            if ui.radio(on, "On").clicked() && !on && self.tcu_wizard.is_none() {
+                                self.tcu_wizard = Some(TcuWizard {
+                                    stage: TcuWizardStage::Intro,
+                                });
+                            }
+                            if ui.radio(!on, "Off").clicked() && on && self.tcu_wizard.is_none() {
                                 match self.state.apply_tracking_control_off() {
                                     Ok(()) => {
                                         self.state.refresh_control_unit();
@@ -725,7 +824,7 @@ impl NythConfigApp {
                         });
                         ui.label(
                             egui::RichText::new(
-                                "Switching it back on needs surface calibration, not offered by NewNyth yet.",
+                                "Switching it back on runs the surface-calibration wizard.",
                             )
                             .small()
                             .weak(),
@@ -760,16 +859,42 @@ impl NythConfigApp {
                             for d in DistanceControl::ALL {
                                 if ui.radio(d == current, Self::dcu_label(d)).clicked()
                                     && d != current
+                                    && self.dcu_keep.is_none()
                                 {
-                                    match self.state.apply_distance_control(d) {
-                                        Ok(()) => {
-                                            self.state.refresh_control_unit();
-                                            self.set_status(
-                                                format!("Lift-off distance: {}", Self::dcu_label(d)),
-                                                ctx,
-                                            );
+                                    // Mirrors the original dcu_changed_cb:
+                                    // live-read the old value, skip when it
+                                    // already matches, write the new one,
+                                    // then hold a keep-or-revert dialog.
+                                    self.state.refresh_control_unit();
+                                    let old = self
+                                        .state
+                                        .control_unit
+                                        .map(|c| DistanceControl::from_u8(c.dcu));
+                                    match old {
+                                        Some(old) if old != d => {
+                                            match self.state.apply_distance_control(d) {
+                                                Ok(()) => {
+                                                    self.state.refresh_control_unit();
+                                                    self.dcu_keep = Some(DcuKeep {
+                                                        applied: d,
+                                                        previous: old,
+                                                        started: std::time::Instant::now(),
+                                                    });
+                                                    self.set_status(
+                                                        format!(
+                                                            "Lift-off distance: {}",
+                                                            Self::dcu_label(d)
+                                                        ),
+                                                        ctx,
+                                                    );
+                                                }
+                                                Err(e) => self.set_status(format!("Error: {e}"), ctx),
+                                            }
                                         }
-                                        Err(e) => self.set_status(format!("Error: {e}"), ctx),
+                                        Some(_) => {}
+                                        None => {
+                                            self.set_status("Could not read the sensor state.", ctx);
+                                        }
                                     }
                                 }
                             }
@@ -802,6 +927,344 @@ impl NythConfigApp {
             DistanceControl::Normal => "Normal",
             DistanceControl::Low => "Low",
             DistanceControl::ExtraLow => "Extra Low",
+        }
+    }
+
+    // ─── TCU surface-calibration wizard ─────────────────────────────
+
+    /// Send the pending cancel (best effort: a handshake is being left)
+    /// and disarm the daemon event watch. This is the teardown the C
+    /// original forgets when the assistant is closed mid-calibration.
+    fn tcu_abandon_handshake(&mut self) {
+        if let Err(e) = self.state.apply_tracking_control_cancel() {
+            log::warn!("Could not send TCU cancel: {e}");
+        }
+        DeviceState::cancel_tcu_watch();
+    }
+
+    fn tcu_show_done(&mut self, message: impl Into<String>) {
+        self.tcu_wizard = Some(TcuWizard {
+            stage: TcuWizardStage::Done {
+                message: message.into(),
+            },
+        });
+    }
+
+    /// "Start" on the intro page: arm the daemon watch, then open the
+    /// handshake. The daemon owns the event endpoints, so without it
+    /// the completion event could never reach the wizard.
+    fn tcu_start_test(&mut self) {
+        if !DeviceState::daemon_alive() {
+            self.tcu_show_done(
+                "The nythd service must be running to detect the end of the test.\n\
+                 Start it with: systemctl --user start nythd",
+            );
+            return;
+        }
+        DeviceState::start_tcu_watch();
+        match self.state.apply_tracking_control_start() {
+            Ok(()) => {
+                self.tcu_wizard = Some(TcuWizard {
+                    stage: TcuWizardStage::Testing {
+                        started: std::time::Instant::now(),
+                    },
+                });
+            }
+            Err(e) => {
+                DeviceState::cancel_tcu_watch();
+                self.tcu_show_done(format!("Could not start the calibration: {e}"));
+            }
+        }
+    }
+
+    /// The keep dialog was answered with "Keep": commit the new data.
+    fn tcu_accept(&mut self, ctx: &egui::Context) {
+        let outcome = self.state.apply_tracking_control_accept();
+        DeviceState::cancel_tcu_watch();
+        self.state.refresh_control_unit();
+        match outcome {
+            Ok(()) => {
+                self.tcu_show_done("New calibration data activated.");
+                self.set_status("Tracking Control Unit on", ctx);
+            }
+            Err(e) => self.tcu_show_done(format!("Could not activate the calibration: {e}")),
+        }
+    }
+
+    /// Discard the calibration (Discard button, mid-test Cancel, or an
+    /// unanswered keep dialog).
+    fn tcu_discard(&mut self, ctx: &egui::Context, why: &str) {
+        let outcome = self.state.apply_tracking_control_cancel();
+        DeviceState::cancel_tcu_watch();
+        self.state.refresh_control_unit();
+        match outcome {
+            Ok(()) => {
+                self.tcu_show_done(why);
+                self.set_status("Tracking Control Unit stays off", ctx);
+            }
+            Err(e) => self.tcu_show_done(format!("Could not discard the calibration: {e}")),
+        }
+    }
+
+    /// Window X: cancel whatever handshake is pending, then close.
+    fn tcu_abandon(&mut self, ctx: &egui::Context) {
+        let mid_handshake = self.tcu_wizard.as_ref().is_some_and(|w| {
+            matches!(
+                w.stage,
+                TcuWizardStage::Testing { .. } | TcuWizardStage::Keep { .. }
+            )
+        });
+        if mid_handshake {
+            self.tcu_abandon_handshake();
+            self.state.refresh_control_unit();
+            self.set_status("Calibration aborted", ctx);
+        }
+        self.tcu_wizard = None;
+    }
+
+    /// Pump the wizard timers and draw its window, once per frame while
+    /// it is open. The `request_repaint_after` calls keep the countdowns
+    /// moving without spinning the event loop.
+    fn ui_tcu_wizard(&mut self, ctx: &egui::Context) {
+        enum Tick {
+            None,
+            Responded,
+            TestTimedOut,
+            KeepExpired,
+        }
+        #[derive(Clone, Copy, PartialEq)]
+        enum WizardAction {
+            None,
+            Start,
+            CancelTest,
+            Accept,
+            Discard,
+            Close,
+            Abandon,
+        }
+
+        // 1) Time- and event-driven transitions, decided without
+        //    holding a wizard borrow across any device write.
+        let mut tick = Tick::None;
+        match &self.tcu_wizard {
+            None => return,
+            Some(w) => match w.stage {
+                TcuWizardStage::Testing { started } => {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                    if DeviceState::poll_tcu_event() {
+                        tick = Tick::Responded;
+                    } else if started.elapsed() > TCU_TEST_TIMEOUT {
+                        tick = Tick::TestTimedOut;
+                    }
+                }
+                TcuWizardStage::Keep { started } => {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(250));
+                    if started.elapsed() > KEEP_TIMEOUT {
+                        tick = Tick::KeepExpired;
+                    }
+                }
+                _ => {}
+            },
+        }
+        match tick {
+            Tick::None => {}
+            Tick::Responded => {
+                self.tcu_wizard = Some(TcuWizard {
+                    stage: TcuWizardStage::Keep {
+                        started: std::time::Instant::now(),
+                    },
+                });
+            }
+            Tick::TestTimedOut => {
+                self.tcu_abandon_handshake();
+                self.state.refresh_control_unit();
+                self.tcu_show_done(
+                    "The mouse did not answer in time. Put it on the surface you use \
+                     and keep it moving in slow circles while the test runs.",
+                );
+            }
+            Tick::KeepExpired => {
+                self.tcu_discard(ctx, "Reverted automatically: calibration discarded.")
+            }
+        }
+
+        // 2) Draw the current stage, collecting the pressed button.
+        let Some(wizard) = self.tcu_wizard.as_mut() else {
+            return;
+        };
+        let mut action = WizardAction::None;
+        let mut open = true;
+        egui::Window::new("Surface calibration")
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(380.0)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| match &mut wizard.stage {
+                    TcuWizardStage::Intro => {
+                        // `.strong()` renders in the theme's accent blue
+                        // (egui paints strong text with the active-widget
+                        // colour), matching the dialogs' question lines.
+                        ui.label(
+                            egui::RichText::new(
+                                "The tracking unit can only be switched on by \
+                                 calibrating the surface it works on.",
+                            )
+                            .strong(),
+                        );
+                        ui.add_space(8.0);
+                        ui.label(
+                            "1. Put the mouse on the surface you use.\n\
+                             2. Press Start, then lift the mouse and move it\n     slowly in circles.\n\
+                             3. Stop as soon as the test reports back.",
+                        );
+                        ui.add_space(12.0);
+                        let (start, cancel) = crate::theme::centered_pair(ui, "Start", "Cancel");
+                        if start {
+                            action = WizardAction::Start;
+                        }
+                        if cancel {
+                            action = WizardAction::Abandon;
+                        }
+                    }
+                    TcuWizardStage::Testing { started } => {
+                        let left = countdown_left(*started, TCU_TEST_TIMEOUT);
+                        ui.label("Calibrating: lift the mouse and move it in\nslow circles…");
+                        ui.add_space(8.0);
+                        let frac = 1.0 - left / TCU_TEST_TIMEOUT.as_secs_f32();
+                        ui.add_sized(
+                            [320.0, 20.0],
+                            egui::ProgressBar::new(frac.clamp(0.0, 1.0))
+                                .animate(true)
+                                .text(format!("{left:.0} s")),
+                        );
+                        ui.add_space(12.0);
+                        if ui.button("Cancel").clicked() {
+                            action = WizardAction::CancelTest;
+                        }
+                    }
+                    TcuWizardStage::Keep { started } => {
+                        let left = countdown_left(*started, KEEP_TIMEOUT);
+                        ui.label(egui::RichText::new("Keep the new calibration?").strong());
+                        ui.label(format!("Reverting automatically in {left:.0} s."));
+                        ui.add_space(12.0);
+                        let (keep, discard) = crate::theme::centered_pair(ui, "Keep", "Discard");
+                        if keep {
+                            action = WizardAction::Accept;
+                        }
+                        if discard {
+                            action = WizardAction::Discard;
+                        }
+                    }
+                    TcuWizardStage::Done { message } => {
+                        ui.label(message.as_str());
+                        ui.add_space(12.0);
+                        if ui.button("Close").clicked() {
+                            action = WizardAction::Close;
+                        }
+                    }
+                });
+            });
+        if !open {
+            action = WizardAction::Abandon;
+        }
+
+        // 3) Apply the pressed button (the writes need `&mut self`,
+        //    which the window borrow above has released).
+        match action {
+            WizardAction::None => {}
+            WizardAction::Start => self.tcu_start_test(),
+            WizardAction::CancelTest => {
+                self.tcu_discard(ctx, "Calibration cancelled. The tracking unit stays off.");
+            }
+            WizardAction::Accept => self.tcu_accept(ctx),
+            WizardAction::Discard => {
+                self.tcu_discard(ctx, "Calibration discarded. The tracking unit stays off.");
+            }
+            WizardAction::Close => self.tcu_wizard = None,
+            WizardAction::Abandon => self.tcu_abandon(ctx),
+        }
+    }
+
+    // ─── DCU keep-or-revert dialog ────────────────────────────────────
+
+    /// Pump and draw the "Keep settings?" dialog for a lift-off
+    /// distance change, mirroring the original 20 s timeout dialog:
+    /// Revert, closing the window, or simply not answering all restore
+    /// the previous setting.
+    fn ui_dcu_keep(&mut self, ctx: &egui::Context) {
+        let Some(keep) = &self.dcu_keep else {
+            return;
+        };
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        let applied = keep.applied;
+        let previous = keep.previous;
+        let left = countdown_left(keep.started, KEEP_TIMEOUT);
+
+        // Running out of time answers the dialog with "Revert".
+        #[derive(Clone, Copy, PartialEq)]
+        enum Answer {
+            None,
+            Keep,
+            Revert,
+        }
+        let mut action = if left <= 0.0 {
+            Answer::Revert
+        } else {
+            Answer::None
+        };
+        let mut open = true;
+        egui::Window::new("Keep settings?")
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(340.0)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Keep the lift-off distance: {}?",
+                            Self::dcu_label(applied)
+                        ))
+                        .strong(),
+                    );
+                    ui.label(format!(
+                        "Reverting automatically in {:.0} s.",
+                        left.max(0.0)
+                    ));
+                    ui.add_space(12.0);
+                    let (keep, revert) = crate::theme::centered_pair(ui, "Keep", "Revert");
+                    if keep {
+                        action = Answer::Keep;
+                    }
+                    if revert {
+                        action = Answer::Revert;
+                    }
+                });
+            });
+        if !open {
+            action = Answer::Revert;
+        }
+
+        match action {
+            Answer::None => {}
+            Answer::Keep => {
+                self.dcu_keep = None;
+                self.set_status("Lift-off distance kept", ctx);
+            }
+            Answer::Revert => {
+                self.dcu_keep = None;
+                let outcome = self.state.apply_distance_control(previous);
+                self.state.refresh_control_unit();
+                match outcome {
+                    Ok(()) => {
+                        self.set_status(format!("Reverted to {}", Self::dcu_label(previous)), ctx);
+                    }
+                    Err(e) => self.set_status(format!("Could not revert: {e}"), ctx),
+                }
+            }
         }
     }
 
@@ -1480,28 +1943,113 @@ impl NythConfigApp {
                             // `self` (the body closure already does), so it
                             // parks the desired change for after the card.
                             let mut new_default: Option<Option<u8>> = None;
+                            // Same parking pattern for the header's inline
+                            // name editor: the closures only see locals.
+                            let editing = self.name_editing == Some(profile_idx);
+                            let focus_open = editing && self.name_edit_focus;
+                            let mut name_buf =
+                                self.profile_name_buf[profile_idx as usize].clone();
+                            let mut toggle_edit = false;
+                            let mut name_changed = false;
+                            let mut close_editor = false;
+                            let mut focus_done = false;
 
                             ui.vertical(|ui| {
                                 ui.set_width(cell_w);
-                                crate::theme::card_with_actions(
+                                // Fixed "Mouse Profile N" prefix, optional
+                                // PC-side name behind a colon.
+                                let name_suffix = self
+                                    .state
+                                    .profile_names
+                                    .get(profile_idx)
+                                    .map(|n| format!(": {}", n))
+                                    .unwrap_or_default();
+                                let header =
+                                    format!("Mouse Profile {}{}", profile_idx + 1, name_suffix);
+                                crate::theme::card_with_header_and_actions(
                                     ui,
-                                &format!("Mouse Profile {}", profile_idx + 1),
-                                &mut |ui| {
-                                    let mut def = is_default;
-                                    if ui
-                                        .checkbox(&mut def, "")
-                                        .on_hover_text(
-                                            "Profile to activate when no listed app is focused",
-                                        )
-                                        .changed()
-                                    {
-                                        new_default =
-                                            Some(if def { Some(profile_idx) } else { None });
-                                    }
-                                    ui.label("Default");
-                                },
-                                |ui| {
-                                    let apps = self
+                                    &format!("autoswitch_profile_{}", profile_idx + 1),
+                                    &mut |ui| {
+                                        // Pencil at the very left of the
+                                        // header strip; it toggles the name
+                                        // field in the centre band.
+                                        if ui
+                                            .small_button("✏")
+                                            .on_hover_text("Rename this profile")
+                                            .clicked()
+                                        {
+                                            toggle_edit = true;
+                                        }
+                                    },
+                                    &mut |ui| {
+                                        if !editing {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(header.as_str()).strong(),
+                                                )
+                                                .halign(egui::Align::Center),
+                                            );
+                                            return;
+                                        }
+                                        // Inline rename: the field sits in the
+                                        // header strip itself. Enter or clicking
+                                        // away closes it; the value is committed
+                                        // to the PC config (the device has no
+                                        // name field) after the card.
+                                        ui.with_layout(
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "Mouse Profile {}:",
+                                                        profile_idx + 1
+                                                    ))
+                                                    .strong(),
+                                                );
+                                                let resp = ui.add(
+                                                    egui::TextEdit::singleline(&mut name_buf)
+                                                        .hint_text("no name"),
+                                                );
+                                                if focus_open {
+                                                    resp.request_focus();
+                                                    focus_done = true;
+                                                }
+                                                if resp.changed() {
+                                                    name_changed = true;
+                                                }
+                                                let enter =
+                                                    ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                                if resp.lost_focus() || (enter && resp.has_focus())
+                                                {
+                                                    resp.surrender_focus();
+                                                    close_editor = true;
+                                                }
+                                            },
+                                        );
+                                    },
+                                    &mut |ui| {
+                                        // The Default box: the tick is
+                                        // painted with the inactive-widget
+                                        // foreground stroke, so raising it
+                                        // to the accent blue here (this
+                                        // strip only) makes it readable.
+                                        ui.visuals_mut().widgets.inactive.fg_stroke.color =
+                                            crate::theme::ACCENT;
+                                        let mut def = is_default;
+                                        if ui
+                                            .checkbox(&mut def, "")
+                                            .on_hover_text(
+                                                "Profile to activate when no listed app is focused",
+                                            )
+                                            .changed()
+                                        {
+                                            new_default =
+                                                Some(if def { Some(profile_idx) } else { None });
+                                        }
+                                        ui.label("Default");
+                                    },
+                                    |ui| {
+                                        let apps = self
                                         .state
                                         .autoswitch
                                         .apps_for_profile(profile_idx)
@@ -1592,6 +2140,35 @@ impl NythConfigApp {
                             if let Some(nd) = new_default {
                                 self.state.autoswitch.default_profile = nd;
                                 self.autoswitch_dirty = true;
+                            }
+
+                            // Apply the parked name-editor results now that
+                            // `self` is free again.
+                            if toggle_edit {
+                                self.name_editing = if editing { None } else { Some(profile_idx) };
+                                self.name_edit_focus = !editing;
+                            }
+                            if focus_done {
+                                self.name_edit_focus = false;
+                            }
+                            if close_editor && !toggle_edit {
+                                self.name_editing = None;
+                            }
+                            if name_changed {
+                                let i = profile_idx as usize;
+                                self.profile_name_buf[i] = name_buf
+                                    .chars()
+                                    .take(roccat_nyth_profile::config::MAX_PROFILE_NAME_LEN)
+                                    .collect();
+                                self.state
+                                    .profile_names
+                                    .set(profile_idx, &self.profile_name_buf[i]);
+                                if let Err(e) = self.state.save_profile_names() {
+                                    self.set_status(
+                                        format!("Could not save profile name: {e}"),
+                                        ctx,
+                                    );
+                                }
                             }
                         }
                     });

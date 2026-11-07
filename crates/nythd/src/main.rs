@@ -543,6 +543,18 @@ fn handle_event(
 
         NythEvent::Tcu => {
             log::debug!("TCU calibration event");
+            // Forward this single event to the config GUI while its
+            // calibration wizard holds a watch request (file handshake,
+            // same pattern as the window-capture request above). The
+            // daemon owns the event endpoints, the GUI cannot listen.
+            let dir = roccat_nyth_profile::config::config_dir();
+            let watch = dir.join("tcu_watch.txt");
+            if watch.exists() {
+                let _ = std::fs::remove_file(&watch);
+                if let Err(e) = std::fs::write(dir.join("tcu_event.txt"), "1") {
+                    log::warn!("Could not write TCU event result file: {}", e);
+                }
+            }
         }
 
         NythEvent::Disconnected => {

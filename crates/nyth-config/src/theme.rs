@@ -42,6 +42,9 @@ const INTERACTIVE: egui::Color32 = egui::Color32::from_rgb(0xbf, 0xbf, 0xbf);
 /// stands out (the Swarm boxes have tinted, centred headings).
 const HEADER: egui::Color32 = egui::Color32::from_rgb(0x26, 0x2a, 0x2f);
 const HEADER_HEIGHT: f32 = 26.0;
+/// Width of the band pinned to the left edge of a card header when it
+/// carries a widget (room for one small icon button plus a margin).
+const HEADER_LEFT_W: f32 = 34.0;
 
 /// Apply fonts and colors to the given context. Call once at startup,
 /// before any widgets are drawn.
@@ -136,7 +139,7 @@ pub fn card<R>(
     title: &str,
     add_body: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    card_inner(ui, title, None, add_body)
+    card_inner(ui, title, title, None, None, None, add_body)
 }
 
 /// Full-width ACCENT-blue horizontal rule (keypad row separation in the
@@ -151,20 +154,40 @@ pub fn accent_rule(ui: &mut egui::Ui) {
     );
 }
 
-/// Like [`card`], but with extra widgets right-aligned inside the header
-/// strip (e.g. a "Default" checkbox).
-pub fn card_with_actions<R>(
+/// Like [`card`], but the caller draws the header content
+/// itself instead of the default centred title (e.g. a title with an
+/// inline rename field), plus widgets pinned to the left edge of the
+/// header strip (e.g. a rename button) and extra widgets right-aligned
+/// in it (e.g. a "Default" checkbox). The centred title and the caller-
+/// drawn header only span the space between the two bands. `id` salts
+/// the header's child [`egui::Ui`]s and must stay stable across frames
+/// while header widgets hold keyboard focus - unlike a displayed title,
+/// it must not embed volatile text.
+pub fn card_with_header_and_actions<R>(
     ui: &mut egui::Ui,
-    title: &str,
+    id: &str,
+    header_left: &mut dyn FnMut(&mut egui::Ui),
+    header: &mut dyn FnMut(&mut egui::Ui),
     header_actions: &mut dyn FnMut(&mut egui::Ui),
     add_body: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    card_inner(ui, title, Some(header_actions), add_body)
+    card_inner(
+        ui,
+        id,
+        "",
+        Some(header_left),
+        Some(header),
+        Some(header_actions),
+        add_body,
+    )
 }
 
 fn card_inner<R>(
     ui: &mut egui::Ui,
+    id: &str,
     title: &str,
+    mut header_left: Option<&mut dyn FnMut(&mut egui::Ui)>,
+    mut header: Option<&mut dyn FnMut(&mut egui::Ui)>,
     mut header_actions: Option<&mut dyn FnMut(&mut egui::Ui)>,
     add_body: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
@@ -183,23 +206,47 @@ fn card_inner<R>(
             ui.allocate_space(strip.size());
             ui.painter().rect_filled(strip, 0.0, HEADER);
 
-            // Reserve a band on the right when the header carries widgets.
+            // Reserve bands on both ends when the header carries widgets.
+            let left_w = if header_left.is_some() {
+                HEADER_LEFT_W
+            } else {
+                0.0
+            };
             let actions_w = if header_actions.is_some() { 150.0 } else { 0.0 };
             let title_rect = egui::Rect::from_min_max(
-                strip.min,
+                egui::pos2(strip.left() + left_w, strip.top()),
                 egui::pos2(strip.right() - actions_w, strip.bottom()),
             );
+            if let Some(left) = header_left.as_mut() {
+                let left_rect = egui::Rect::from_min_max(
+                    strip.min + egui::vec2(4.0, 0.0),
+                    egui::pos2(strip.left() + left_w, strip.bottom()),
+                );
+                let mut left_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .id_salt(("card_header_left", id))
+                        .max_rect(left_rect)
+                        .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                );
+                left(&mut left_ui);
+            }
             let mut title_ui = ui.new_child(
                 egui::UiBuilder::new()
-                    .id_salt(("card_header", title))
+                    .id_salt(("card_header", id))
                     .max_rect(title_rect)
                     .layout(egui::Layout::centered_and_justified(
                         egui::Direction::LeftToRight,
                     )),
             );
-            title_ui.add(
-                egui::Label::new(egui::RichText::new(title).strong()).halign(egui::Align::Center),
-            );
+            match header.as_mut() {
+                Some(draw_header) => draw_header(&mut title_ui),
+                None => {
+                    title_ui.add(
+                        egui::Label::new(egui::RichText::new(title).strong())
+                            .halign(egui::Align::Center),
+                    );
+                }
+            }
             if let Some(actions) = header_actions.as_mut() {
                 let acts_rect = egui::Rect::from_min_max(
                     egui::pos2(strip.right() - actions_w, strip.top()),
@@ -207,7 +254,7 @@ fn card_inner<R>(
                 );
                 let mut acts_ui = ui.new_child(
                     egui::UiBuilder::new()
-                        .id_salt(("card_actions", title))
+                        .id_salt(("card_actions", id))
                         .max_rect(acts_rect)
                         .layout(egui::Layout::right_to_left(egui::Align::Center)),
                 );
@@ -255,4 +302,47 @@ pub fn centered_row_sized<R>(
         egui::Layout::left_to_right(egui::Align::Center),
         add_contents,
     )
+}
+
+/// A centred pair of buttons, e.g. the answers in the calibration
+/// dialogs. [`centered_row`] centres its fixed-width strip but packs the
+/// buttons against the strip's left edge, so a narrower group visibly
+/// drifts left; here each button instead gets one half of the row - the
+/// first laid out right-to-left into the left half, the second
+/// left-to-right into the right half - so the pair always hugs the
+/// centre, at natural button widths and any font scale.
+///
+/// Returns `(first_clicked, second_clicked)`.
+pub fn centered_pair(ui: &mut egui::Ui, first: &str, second: &str) -> (bool, bool) {
+    let gap = ui.spacing().item_spacing.x;
+    let height = ui.spacing().interact_size.y;
+    let strip =
+        egui::Rect::from_min_size(ui.cursor().min, egui::vec2(ui.available_width(), height));
+    let mid = strip.center().x;
+    let first_clicked = {
+        let mut left = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(("centered_pair", first))
+                .max_rect(egui::Rect::from_min_max(
+                    strip.min,
+                    egui::pos2(mid - gap / 2.0, strip.bottom()),
+                ))
+                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        );
+        left.button(first).clicked()
+    };
+    let second_clicked = {
+        let mut right = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(("centered_pair", second))
+                .max_rect(egui::Rect::from_min_max(
+                    egui::pos2(mid + gap / 2.0, strip.min.y),
+                    strip.max,
+                ))
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        right.button(second).clicked()
+    };
+    ui.allocate_space(strip.size());
+    (first_clicked, second_clicked)
 }
