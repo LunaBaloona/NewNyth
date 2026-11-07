@@ -268,4 +268,23 @@ mod tests {
         assert_eq!(names.get(0), None);
         assert!(!names.names.contains_key("0"));
     }
+
+    #[test]
+    fn openers_lookup_by_profile_and_button() {
+        let mut cfg = OpenersConfig::default();
+        cfg.set(0, 3, "firefox --private-window");
+        cfg.set(4, 11, "dolphin");
+        assert_eq!(cfg.get(0, 3), Some("firefox --private-window"));
+        // Neighbouring buttons and other profiles stay unconfigured.
+        assert_eq!(cfg.get(0, 4), None);
+        assert_eq!(cfg.get(1, 3), None);
+
+        // An empty command removes the entry again.
+        cfg.set(0, 3, "");
+        assert_eq!(cfg.get(0, 3), None);
+
+        let json = serde_json::to_string(&cfg).unwrap();
+        let back: OpenersConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.get(4, 11), Some("dolphin"));
+    }
 }

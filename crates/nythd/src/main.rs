@@ -547,18 +547,25 @@ fn handle_event(
             // calibration wizard holds a watch request (file handshake,
             // same pattern as the window-capture request above). The
             // daemon owns the event endpoints, the GUI cannot listen.
-            let dir = roccat_nyth_profile::config::config_dir();
-            let watch = dir.join("tcu_watch.txt");
-            if watch.exists() {
-                let _ = std::fs::remove_file(&watch);
-                if let Err(e) = std::fs::write(dir.join("tcu_event.txt"), "1") {
-                    log::warn!("Could not write TCU event result file: {}", e);
-                }
-            }
+            forward_tcu_event(&roccat_nyth_profile::config::config_dir());
         }
 
         NythEvent::Disconnected => {
             events::send_notification("Roccat Nyth", "Device disconnected");
+        }
+    }
+}
+
+/// One-shot watch handshake for the calibration wizard: consumes a
+/// pending watch request and leaves the event file behind for the GUI
+/// to pick up. Events without a waiting watcher are dropped. Split out
+/// of [`handle_event`] so tests can run it against a temporary dir.
+fn forward_tcu_event(dir: &std::path::Path) {
+    let watch = dir.join("tcu_watch.txt");
+    if watch.exists() {
+        let _ = std::fs::remove_file(&watch);
+        if let Err(e) = std::fs::write(dir.join("tcu_event.txt"), "1") {
+            log::warn!("Could not write TCU event result file: {}", e);
         }
     }
 }
@@ -591,7 +598,36 @@ extern "C" fn handle_signal(_sig: i32) {
 
 #[cfg(test)]
 mod tests {
-    use super::acquire_instance_lock;
+    use super::{acquire_instance_lock, forward_tcu_event};
+
+    #[test]
+    fn tcu_forward_is_one_shot() {
+        // Unique dir per test process so parallel tests don't collide.
+        let dir =
+            std::env::temp_dir().join(format!("newnyth-tcu-forward-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let watch = dir.join("tcu_watch.txt");
+        let event = dir.join("tcu_event.txt");
+        let _ = std::fs::remove_file(&watch);
+        let _ = std::fs::remove_file(&event);
+
+        // No armed watch: the event is dropped silently.
+        forward_tcu_event(&dir);
+        assert!(!event.exists());
+
+        // Armed watch: forwards once and consumes the request.
+        std::fs::write(&watch, "1").unwrap();
+        forward_tcu_event(&dir);
+        assert!(!watch.exists(), "watch request must be consumed");
+        assert_eq!(std::fs::read_to_string(&event).unwrap(), "1");
+
+        // One-shot: a second event without a new request is dropped.
+        std::fs::remove_file(&event).unwrap();
+        forward_tcu_event(&dir);
+        assert!(!event.exists());
+
+        let _ = std::fs::remove_dir(&dir);
+    }
 
     #[test]
     fn instance_lock_rejects_second_holder() {

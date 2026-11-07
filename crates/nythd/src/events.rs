@@ -323,3 +323,135 @@ fn run_media_cmd(program: &str, args: &[&str]) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{NythEvent, parse_event, xdg_folder_for_windows_subtype};
+    use roccat_nyth_hid::protocol::SpecialReport;
+
+    fn report(event_type: u8, data1: u8, data2: u8) -> SpecialReport {
+        SpecialReport {
+            report_id: 0x03,
+            unused: 0,
+            event_type,
+            data1,
+            data2,
+        }
+    }
+
+    #[test]
+    fn profile_change_decodes_zero_based() {
+        assert!(matches!(
+            parse_event(&report(0x20, 3, 0)),
+            Some(NythEvent::ProfileChanged { profile_index: 2 })
+        ));
+        // A raw 0 or an out-of-range byte saturates instead of wrapping.
+        assert!(matches!(
+            parse_event(&report(0x20, 0, 0)),
+            Some(NythEvent::ProfileChanged { profile_index: 0 })
+        ));
+    }
+
+    #[test]
+    fn tcu_event_passes_through() {
+        assert!(matches!(
+            parse_event(&report(0x30, 0, 0)),
+            Some(NythEvent::Tcu)
+        ));
+    }
+
+    #[test]
+    fn press_only_events_ignore_releases() {
+        // Press: data2 == 0 is the gate for all of these.
+        assert!(matches!(
+            parse_event(&report(0x60, 5, 0)),
+            Some(NythEvent::OpenApplication { button_index: 4 })
+        ));
+        assert!(matches!(
+            parse_event(&report(0x80, 2, 0)),
+            Some(NythEvent::TimerStart { button_index: 1 })
+        ));
+        assert!(matches!(
+            parse_event(&report(0x90, 0, 0)),
+            Some(NythEvent::TimerStop)
+        ));
+        assert!(matches!(
+            parse_event(&report(0xf0, 0x23, 0)),
+            Some(NythEvent::Multimedia { action: 0x23 })
+        ));
+        assert!(matches!(
+            parse_event(&report(0xf2, 0x02, 0)),
+            Some(NythEvent::WindowsAction { subtype: 0x02 })
+        ));
+
+        // Release: a non-zero data2 must not fire the action again.
+        assert!(parse_event(&report(0x60, 5, 1)).is_none());
+        assert!(parse_event(&report(0x80, 2, 1)).is_none());
+        assert!(parse_event(&report(0x90, 0, 1)).is_none());
+        assert!(parse_event(&report(0xf0, 0x23, 1)).is_none());
+        assert!(parse_event(&report(0xf2, 0x02, 1)).is_none());
+    }
+
+    #[test]
+    fn open_driver_requires_zero_data1() {
+        assert!(matches!(
+            parse_event(&report(0xa0, 0, 0)),
+            Some(NythEvent::OpenDriver)
+        ));
+        assert!(parse_event(&report(0xa0, 1, 0)).is_none());
+    }
+
+    #[test]
+    fn cpi_and_sensitivity_fields() {
+        assert!(matches!(
+            parse_event(&report(0xb0, 4, 0)),
+            Some(NythEvent::CpiChanged { cpi_index: 3 })
+        ));
+        // Sensitivity is not press-gated; both axes pass through.
+        assert!(matches!(
+            parse_event(&report(0xc0, 7, 9)),
+            Some(NythEvent::SensitivityChanged { x: 7, y: 9 })
+        ));
+    }
+
+    #[test]
+    fn open_action_and_easishift_fields() {
+        assert!(matches!(
+            parse_event(&report(0xf3, 0x01, 3)),
+            Some(NythEvent::OpenAction {
+                subtype: 0x01,
+                button_index: 2
+            })
+        ));
+        assert!(matches!(
+            parse_event(&report(0xff, 6, 1)),
+            Some(NythEvent::EasyShift {
+                button_index: 5,
+                action: 1
+            })
+        ));
+    }
+
+    #[test]
+    fn rad_and_unknown_events_are_ignored() {
+        for event_type in 0xe1..=0xea {
+            assert!(
+                parse_event(&report(event_type, 1, 0)).is_none(),
+                "RAD event {event_type:#04x} must be ignored"
+            );
+        }
+        assert!(parse_event(&report(0x00, 1, 0)).is_none());
+        assert!(parse_event(&report(0x11, 1, 0)).is_none());
+    }
+
+    #[test]
+    fn windows_subtypes_map_to_xdg_dirs() {
+        assert_eq!(xdg_folder_for_windows_subtype(0x02), Some("DESKTOP"));
+        assert_eq!(xdg_folder_for_windows_subtype(0x05), Some("DOCUMENTS"));
+        assert_eq!(xdg_folder_for_windows_subtype(0x06), Some("DOWNLOAD"));
+        assert_eq!(xdg_folder_for_windows_subtype(0x07), Some("MUSIC"));
+        assert_eq!(xdg_folder_for_windows_subtype(0x08), Some("PICTURES"));
+        assert_eq!(xdg_folder_for_windows_subtype(0x01), None);
+        assert_eq!(xdg_folder_for_windows_subtype(0x09), None);
+    }
+}

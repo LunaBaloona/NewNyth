@@ -231,10 +231,7 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
                     }
 
                     if let Ok(content) = std::fs::read_to_string(&file_path) {
-                        let app = content.trim().to_string();
-                        if !app.is_empty() {
-                            current_app = Some(app);
-                        }
+                        current_app = parse_active_window(&content);
                     }
                 }
 
@@ -274,6 +271,13 @@ pub fn start_window_poller() -> mpsc::Receiver<String> {
     rx
 }
 
+/// Parse the active-window file content: the trimmed app class, or
+/// `None` while the file is still empty or only whitespace.
+fn parse_active_window(content: &str) -> Option<String> {
+    let app = content.trim().to_string();
+    (!app.is_empty()).then_some(app)
+}
+
 fn xdotool_get_class() -> Option<String> {
     let output = Command::new("xdotool")
         .args(["getactivewindow", "getwindowclassname"])
@@ -288,4 +292,23 @@ fn xdotool_get_class() -> Option<String> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_active_window;
+
+    #[test]
+    fn active_window_file_is_trimmed() {
+        assert_eq!(
+            parse_active_window("  brave-browser\n").as_deref(),
+            Some("brave-browser")
+        );
+    }
+
+    #[test]
+    fn blank_active_window_reports_nothing() {
+        assert_eq!(parse_active_window("").as_deref(), None);
+        assert_eq!(parse_active_window(" \n\t").as_deref(), None);
+    }
 }
