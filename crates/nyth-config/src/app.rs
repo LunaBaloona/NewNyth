@@ -35,6 +35,10 @@ pub struct NythConfigApp {
     opener_edit_buf: String,
     // Auto-switch state
     autoswitch_dirty: bool,
+    /// PC-side profile display-name edit buffers, indexed by profile.
+    /// The Nyth has no name field, so these map straight onto
+    /// `state.profile_names` and are saved as soon as they change.
+    profile_name_buf: [String; NYTH_PROFILE_NUM as usize],
     /// When capturing: (profile_index, slot_index) to assign the next captured app to.
     capturing_for: Option<(u8, usize)>,
     /// Last time the active-profile byte was re-read (indicator refresh poll).
@@ -50,6 +54,13 @@ impl NythConfigApp {
 
         let state = DeviceState::load_from_device();
         let selected = state.active_profile;
+        let profile_name_buf: [String; NYTH_PROFILE_NUM as usize] = std::array::from_fn(|i| {
+            state
+                .profile_names
+                .get(i as u8)
+                .unwrap_or_default()
+                .to_string()
+        });
         let profile = state
             .profiles
             .get(selected as usize)
@@ -68,6 +79,7 @@ impl NythConfigApp {
             selected_button: None,
             opener_edit_buf: String::new(),
             autoswitch_dirty: false,
+            profile_name_buf,
             capturing_for: None,
             last_profile_poll: std::time::Instant::now(),
             tex_nyth_top: None,
@@ -137,6 +149,13 @@ impl NythConfigApp {
     fn reload_device(&mut self, ctx: &egui::Context) {
         self.state = DeviceState::load_from_device();
         self.load_pending_from_profile();
+        self.profile_name_buf = std::array::from_fn(|i| {
+            self.state
+                .profile_names
+                .get(i as u8)
+                .unwrap_or_default()
+                .to_string()
+        });
         if self.state.connected {
             self.set_status("Device data reloaded", ctx);
         }
@@ -328,7 +347,11 @@ impl eframe::App for NythConfigApp {
                         } else {
                             egui::Button::new(format!("{}", i + 1))
                         };
-                        let r = ui.add_sized([30.0, 26.0], btn);
+                        let tip = match self.state.profile_names.get(i) {
+                            Some(name) => format!("Profile {}: {}", i + 1, name),
+                            None => format!("Profile {}", i + 1),
+                        };
+                        let r = ui.add_sized([30.0, 26.0], btn).on_hover_text(tip);
                         if r.clicked() {
                             self.selected_profile = i;
                         }
@@ -1483,9 +1506,19 @@ impl NythConfigApp {
 
                             ui.vertical(|ui| {
                                 ui.set_width(cell_w);
+                                // Fixed "Mouse Profile N" prefix, optional
+                                // PC-side name behind a colon.
+                                let name_suffix = self
+                                    .state
+                                    .profile_names
+                                    .get(profile_idx)
+                                    .map(|n| format!(": {}", n))
+                                    .unwrap_or_default();
+                                let header =
+                                    format!("Mouse Profile {}{}", profile_idx + 1, name_suffix);
                                 crate::theme::card_with_actions(
                                     ui,
-                                &format!("Mouse Profile {}", profile_idx + 1),
+                                &header,
                                 &mut |ui| {
                                     let mut def = is_default;
                                     if ui
@@ -1501,6 +1534,43 @@ impl NythConfigApp {
                                     ui.label("Default");
                                 },
                                 |ui| {
+                                    // Display-name editor: saved to the PC
+                                    // config immediately (the device has no
+                                    // name field, so nothing has to be
+                                    // written to the mouse).
+                                    let name_w = ui.available_width().max(120.0);
+                                    let name_resp = ui
+                                        .add_sized(
+                                            [name_w, 20.0],
+                                            egui::TextEdit::singleline(
+                                                &mut self.profile_name_buf[profile_idx as usize],
+                                            )
+                                            .hint_text("no name"),
+                                        )
+                                        .on_hover_text(
+                                            "Display name, stored on this computer only. It \
+                                             shows here and as a tooltip on the profile-slot \
+                                             buttons.",
+                                        );
+                                    if name_resp.changed() {
+                                        let i = profile_idx as usize;
+                                        self.profile_name_buf[i] = self.profile_name_buf[i]
+                                            .chars()
+                                            .take(roccat_nyth_profile::config::MAX_PROFILE_NAME_LEN)
+                                            .collect();
+                                        self.state.profile_names.set(
+                                            profile_idx,
+                                            &self.profile_name_buf[i],
+                                        );
+                                        if let Err(e) = self.state.save_profile_names() {
+                                            self.set_status(
+                                                format!("Could not save profile name: {e}"),
+                                                ctx,
+                                            );
+                                        }
+                                    }
+                                    ui.separator();
+
                                     let apps = self
                                         .state
                                         .autoswitch

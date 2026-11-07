@@ -2,7 +2,7 @@
 
 use roccat_nyth_hid::protocol::*;
 use roccat_nyth_profile::NythDevice;
-use roccat_nyth_profile::config::{AutoSwitchConfig, OpenersConfig};
+use roccat_nyth_profile::config::{AutoSwitchConfig, OpenersConfig, ProfileNames};
 
 /// Cached state for a single profile.
 #[derive(Clone)]
@@ -22,6 +22,8 @@ pub struct DeviceState {
     pub error_message: Option<String>,
     pub openers: OpenersConfig,
     pub autoswitch: AutoSwitchConfig,
+    /// PC-side profile display names (the device has no name field).
+    pub profile_names: ProfileNames,
     /// Device-level TCU/DCU state, read on (re)connect.
     pub control_unit: Option<ControlUnitReport>,
 }
@@ -38,6 +40,7 @@ impl DeviceState {
             error_message: None,
             openers: OpenersConfig::default(),
             autoswitch: AutoSwitchConfig::default(),
+            profile_names: ProfileNames::default(),
             control_unit: None,
         }
     }
@@ -63,6 +66,7 @@ impl DeviceState {
             error_message: None,
             openers: OpenersConfig::load(),
             autoswitch: AutoSwitchConfig::load(),
+            profile_names: ProfileNames::load(),
             control_unit: nyth.read_control_unit().ok(),
         };
 
@@ -155,6 +159,10 @@ impl DeviceState {
 
     pub fn save_autoswitch(&self) -> Result<(), String> {
         self.autoswitch.save()
+    }
+
+    pub fn save_profile_names(&self) -> Result<(), String> {
+        self.profile_names.save()
     }
 
     /// Tell the daemon to reload its config files.
