@@ -147,10 +147,77 @@ impl DeviceState {
     }
 
     /// Turn the tracking control unit off. Device-level and immediate;
-    /// switching it back on requires calibration (not offered yet).
+    /// switching it back on goes through the calibration wizard.
     pub fn apply_tracking_control_off(&self) -> Result<(), String> {
         let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
         nyth.write_tracking_control_off().map_err(|e| e.to_string())
+    }
+
+    /// Start the surface-calibration handshake (see the wizard).
+    pub fn apply_tracking_control_start(&self) -> Result<(), String> {
+        let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
+        nyth.write_tracking_control_start()
+            .map_err(|e| e.to_string())
+    }
+
+    /// Commit a finished calibration (answers "keep" to the wizard).
+    pub fn apply_tracking_control_accept(&self) -> Result<(), String> {
+        let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
+        nyth.write_tracking_control_accept()
+            .map_err(|e| e.to_string())
+    }
+
+    /// Abandon a calibration (answers "discard", or cancels mid-test).
+    pub fn apply_tracking_control_cancel(&self) -> Result<(), String> {
+        let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
+        nyth.write_tracking_control_cancel()
+            .map_err(|e| e.to_string())
+    }
+
+    // ── TCU calibration event watch ──────────────────────────────
+    //
+    // The daemon owns the event hidraw endpoints, so the wizard cannot
+    // read the calibration-complete event itself. It asks the daemon to
+    // forward that one event through two files in the config dir, the
+    // same handshake style as the window capture above: writing the
+    // request, polling for the result, deleting both on teardown.
+
+    /// Arm a one-shot forward of the next TCU calibration event.
+    pub fn start_tcu_watch() {
+        let dir = roccat_nyth_profile::config::config_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::remove_file(dir.join("tcu_event.txt"));
+        let _ = std::fs::write(dir.join("tcu_watch.txt"), "1");
+    }
+
+    /// True once the daemon has forwarded the calibration event
+    /// (consumes the result file).
+    pub fn poll_tcu_event() -> bool {
+        let path = roccat_nyth_profile::config::config_dir().join("tcu_event.txt");
+        std::fs::remove_file(&path).is_ok()
+    }
+
+    /// Disarm the watch and drop any unconsumed event (wizard teardown).
+    pub fn cancel_tcu_watch() {
+        let dir = roccat_nyth_profile::config::config_dir();
+        let _ = std::fs::remove_file(dir.join("tcu_watch.txt"));
+        let _ = std::fs::remove_file(dir.join("tcu_event.txt"));
+    }
+
+    /// Whether the nythd service currently owns its D-Bus name. The
+    /// calibration wizard needs it to see the device's completion event.
+    pub fn daemon_alive() -> bool {
+        let Ok(conn) = dbus::blocking::Connection::new_session() else {
+            return false;
+        };
+        let proxy = conn.with_proxy(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            std::time::Duration::from_millis(500),
+        );
+        let result: Result<(bool,), _> =
+            proxy.method_call("org.freedesktop.DBus", "NameHasOwner", ("org.roccat.Nyth",));
+        result.map(|(has_owner,)| has_owner).unwrap_or(false)
     }
 
     pub fn save_openers(&self) -> Result<(), String> {

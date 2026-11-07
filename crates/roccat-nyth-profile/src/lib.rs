@@ -228,20 +228,45 @@ impl NythDevice {
         Ok(())
     }
 
-    /// Turn the tracking control unit (lift detection) off.
+    /// Write a tracking-unit command (the `tcu`/`action` pair of a
+    /// control-unit report, with the distance field left unchanged).
     ///
-    /// Mirrors `nyth_tracking_control_unit_off()`. The original driver
-    /// only ever turns the TCU *on* as part of the Start→Accept surface
-    /// calibration handshake, which NewNyth does not drive yet, so
-    /// switching off is the only direct TCU write offered here.
-    pub fn write_tracking_control_off(&self) -> Result<()> {
-        let report = ControlUnitReport::new(
-            ControlUnitReport::UNCHANGED,
-            TcuAction::Off as u8,
-            TcuAction::Off as u8,
-        );
+    /// Mirrors the original driver's `nyth_tracking_control_unit()` in
+    /// `nyth_control_unit.c`.
+    fn write_tracking_control(&self, tcu: u8, action: TcuAction) -> Result<()> {
+        let report = ControlUnitReport::new(ControlUnitReport::UNCHANGED, tcu, action as u8);
         hidraw::write_struct(&self.dev, &report)?;
         Ok(())
+    }
+
+    /// Start the surface-calibration handshake (turn the TCU on).
+    ///
+    /// This is the only way the device switches the TCU on: it calibrates
+    /// the current surface and then reports back with a special event
+    /// (type `0x30`), which the caller must follow up with either
+    /// [`Self::write_tracking_control_accept`] or
+    /// [`Self::write_tracking_control_cancel`] (see roccat-tools
+    /// `nyth_tcu_calibration_assistant.c`).
+    pub fn write_tracking_control_start(&self) -> Result<()> {
+        self.write_tracking_control(1, TcuAction::Start)
+    }
+
+    /// Commit the calibration started by
+    /// [`Self::write_tracking_control_start`].
+    pub fn write_tracking_control_accept(&self) -> Result<()> {
+        self.write_tracking_control(1, TcuAction::Accept)
+    }
+
+    /// Abandon the calibration started by
+    /// [`Self::write_tracking_control_start`] (also answers the
+    /// keep-or-discard question with "discard").
+    pub fn write_tracking_control_cancel(&self) -> Result<()> {
+        self.write_tracking_control(1, TcuAction::Cancel)
+    }
+
+    /// Turn the tracking control unit (lift detection) off.
+    pub fn write_tracking_control_off(&self) -> Result<()> {
+        self.write_tracking_control(0, TcuAction::Off)
     }
 
     // ── Button set (side-button preset) ─────────────────────────────
