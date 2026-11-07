@@ -1,0 +1,8 @@
+Origin: NewNyth
+Label: NewNyth
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: NewNyth Linux driver packages for Debian and Ubuntu
+SignWith: 24FE650C9319721840B815458D4484E09C89B720

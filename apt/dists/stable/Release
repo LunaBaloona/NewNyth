@@ -1,0 +1,20 @@
+Origin: NewNyth
+Label: NewNyth
+Suite: stable
+Codename: stable
+Date: Sat, 07 Nov 2026 18:37:31 UTC
+Architectures: amd64
+Components: main
+Description: NewNyth Linux driver packages for Debian and Ubuntu
+MD5Sum:
+ eb9977e68f36ef6e9ddfdb0a6dacbb3a 1386 main/binary-amd64/Packages
+ 1f4bf745ecc409b772f5ca3a04fba371 837 main/binary-amd64/Packages.gz
+ 4fc80b19d3dc856d78a857fd19544eba 148 main/binary-amd64/Release
+SHA1:
+ 1349c9b74767db6bb2d64f18ca3cd6df437f23e5 1386 main/binary-amd64/Packages
+ d2bc8c38a75996907cafd903c2ad9d5d98d0440d 837 main/binary-amd64/Packages.gz
+ 216760939082cb4fb12734cca8c8816e9e2f1ab1 148 main/binary-amd64/Release
+SHA256:
+ 10ea7de16322459808f22c94e29f98900e12da6bbee895bf77e69087707dfac6 1386 main/binary-amd64/Packages
+ 554412fc39abe2df6f8e47d400c096562d2567c03cec8b17df48356d4bc7c687 837 main/binary-amd64/Packages.gz
+ fd8ef8c5b4bb5c110a5a0daca62e8f5059f54b43afd05334fe7f92fe057c0015 148 main/binary-amd64/Release

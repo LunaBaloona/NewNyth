@@ -1,0 +1,6 @@
+Archive: stable
+Component: main
+Origin: NewNyth
+Label: NewNyth
+Architecture: amd64
+Description: NewNyth Linux driver packages for Debian and Ubuntu

@@ -1,0 +1,14 @@
+# NewNyth package repository for Fedora, RHEL and openSUSE.
+# Install with:
+#   sudo curl -fsSL https://lunabaloona.github.io/NewNyth/dnf/newnyth.repo -o /etc/yum.repos.d/newnyth.repo
+# or drop this file into /etc/yum.repos.d/ yourself.
+#
+# repo_gpgcheck=1 verifies the signed repomd.xml (repomd.xml.asc); its
+# checksums authenticate every package in the repository.
+[newnyth]
+name=NewNyth
+baseurl=https://lunabaloona.github.io/NewNyth/dnf/$basearch/
+enabled=1
+gpgcheck=0
+repo_gpgcheck=1
+gpgkey=https://lunabaloona.github.io/NewNyth/newnyth.asc

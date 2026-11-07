@@ -1,0 +1,29 @@
+Package: newnyth
+Version: 0.9.4-1
+Architecture: amd64
+Maintainer: NewNyth Contributors <newnyth@lists.local>
+Homepage: https://github.com/LunaBaloona/NewNyth
+Standards-Version: 4.7.0
+Installed-Size: 24000
+Depends: libc6 (>= 2.39), libdbus-1-3, libfontconfig1, libx11-6, libx11-xcb1, libxi6, libxcursor1, libxkbcommon0 (>= 1.6.0), libxkbcommon-x11-0, libwayland-client0, libwayland-egl1, libegl1, libgl1, desktop-file-utils, hicolor-icon-theme
+Recommends: playerctl, pulseaudio-utils, libgles2
+Suggests: gnome-shell-extension-appindicator
+Replaces: rustynyth (<= 0.7)
+Breaks: rustynyth (<= 0.7)
+Priority: optional
+Section: utils
+Filename: pool/main/n/newnyth/newnyth_0.9.4-1_amd64.deb
+Size: 14937134
+SHA256: aac8dd6837ab24a5127636db16bd03c492b361a810bdbf9b6be12b19c90ea2b5
+SHA1: 8e1351cceeaac29ddb1d250a7459528ede67db21
+MD5sum: de6017b209a71662cc80f38e06fda03a
+Description: driver, daemon, CLI and GUI for the Roccat Nyth gaming mouse
+ Modern Linux driver and configuration tools for the Roccat Nyth gaming
+ mouse, rewritten in Rust from the original roccat-tools C codebase.
+ .
+ Ships the full configuration GUI (newnyth), a floating profile switcher
+ (newnyth-mini), a background daemon with D-Bus interface and profile
+ auto-switch support (nythd), and a CLI for scripts and automation
+ (nythctl). Includes the udev rule for device access and a systemd user
+ service for the daemon.
+
