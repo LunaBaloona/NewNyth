@@ -181,9 +181,18 @@ impl eframe::App for MiniApp {
                             // crowds this tiny window. Same show/hide
                             // heuristics, only anchored differently.
                             if egui::Tooltip::should_show_tooltip(&response, false) {
+                                // Above the button, centred where it fits.
+                                // Without the TOP_START/TOP_END fallbacks
+                                // egui would flip the edge buttons' tips
+                                // below, as the centred version does not
+                                // fit inside the small window there.
                                 egui::Popup::from_response(&response)
                                     .kind(egui::PopupKind::Tooltip)
                                     .align(egui::RectAlign::TOP)
+                                    .align_alternatives(&[
+                                        egui::RectAlign::TOP_START,
+                                        egui::RectAlign::TOP_END,
+                                    ])
                                     .gap(6.0)
                                     .show(|ui| {
                                         ui.label(&tip);
