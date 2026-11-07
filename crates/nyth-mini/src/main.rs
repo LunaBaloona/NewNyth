@@ -175,7 +175,20 @@ impl eframe::App for MiniApp {
                                 Some(name) => format!("Profile {}: {}", i + 1, name),
                                 None => format!("Profile {}", i + 1),
                             };
-                            let response = ui.add_sized([34.0, 28.0], btn).on_hover_text(tip);
+                            let response = ui.add_sized([34.0, 28.0], btn);
+                            // Tooltip ABOVE the button: egui's default
+                            // placement hangs below the cursor, which
+                            // crowds this tiny window. Same show/hide
+                            // heuristics, only anchored differently.
+                            if egui::Tooltip::should_show_tooltip(&response, false) {
+                                egui::Popup::from_response(&response)
+                                    .kind(egui::PopupKind::Tooltip)
+                                    .align(egui::RectAlign::TOP)
+                                    .gap(6.0)
+                                    .show(|ui| {
+                                        ui.label(&tip);
+                                    });
+                            }
                             if response.clicked() && !is_active {
                                 self.switch_profile(i);
                             }
