@@ -155,6 +155,69 @@ impl AutoSwitchConfig {
     }
 }
 
+// ────────────── Profile names ────────────────────────────────────────────────
+
+/// Path to the profile-names config file.
+pub fn profile_names_path() -> PathBuf {
+    config_dir().join("profile_names.json")
+}
+
+/// Maximum length of a profile display name, in characters.
+pub const MAX_PROFILE_NAME_LEN: usize = 32;
+
+/// Profile display names, typed in the GUI and stored on the PC.
+///
+/// The Nyth hardware has no name field, so these names live in this file
+/// only: tooltips and the auto-switch cards show them, nothing device
+/// facing depends on them.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProfileNames {
+    /// Key: profile index as string ("0"–"4"). Value: display name.
+    #[serde(default)]
+    pub names: HashMap<String, String>,
+}
+
+impl ProfileNames {
+    pub fn load() -> Self {
+        let path = profile_names_path();
+        match std::fs::read_to_string(&path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
+                log::warn!("Invalid profile-names config at {}: {}", path.display(), e);
+                Self::default()
+            }),
+            Err(_) => Self::default(),
+        }
+    }
+
+    pub fn save(&self) -> Result<(), String> {
+        let dir = config_dir();
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
+        let path = profile_names_path();
+        let json = serde_json::to_string_pretty(self).map_err(|e| format!("JSON error: {}", e))?;
+        std::fs::write(&path, json).map_err(|e| format!("Cannot write {}: {}", path.display(), e))
+    }
+
+    /// Display name for a profile, or None when unset or blank.
+    pub fn get(&self, profile_index: u8) -> Option<&str> {
+        self.names
+            .get(&profile_index.to_string())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Set the display name; an empty or blank name clears the entry.
+    pub fn set(&mut self, profile_index: u8, name: &str) {
+        let name = name.trim();
+        if name.is_empty() {
+            self.names.remove(&profile_index.to_string());
+        } else {
+            self.names
+                .insert(profile_index.to_string(), name.to_string());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +248,24 @@ mod tests {
         assert_eq!(back.default_profile, Some(0));
         assert_eq!(back.profile_for_app("brave-browser"), Some(1));
         assert_eq!(back.profile_for_app("org.kde.dolphin"), Some(4));
+    }
+
+    #[test]
+    fn profile_names_roundtrip_and_clearing() {
+        let mut names = ProfileNames::default();
+        names.set(0, "Gaming");
+        names.set(2, "  Work  ");
+        assert_eq!(names.get(0), Some("Gaming"));
+        assert_eq!(names.get(2), Some("Work"));
+        assert_eq!(names.get(1), None);
+
+        let json = serde_json::to_string(&names).unwrap();
+        let back: ProfileNames = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.get(0), Some("Gaming"));
+
+        // Blank names remove the entry again.
+        names.set(0, "   ");
+        assert_eq!(names.get(0), None);
+        assert!(!names.names.contains_key("0"));
     }
 }
