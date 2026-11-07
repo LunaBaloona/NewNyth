@@ -1,0 +1,104 @@
+name: Package repositories
+
+# Publishing a release refreshes the signed apt and dnf channels served
+# from the gh-pages branch (https://lunabaloona.github.io/NewNyth/).
+# Every run is a full regeneration from all published, non-prerelease
+# releases, so an unpublished or deleted release drops out of the
+# repositories automatically.
+#
+# Requires repository secrets (see docs/RELEASING.md):
+#   NEWNYTH_GPG_PRIVATE_KEY  ASCII-armored repo signing private key
+#   NEWNYTH_GPG_PASSPHRASE   its passphrase
+
+on:
+  release:
+    types: [published, edited, unpublished, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # push the generated metadata to gh-pages
+
+concurrency:
+  group: package-repositories
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install repository tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y reprepro createrepo-c
+
+      - name: Import signing key
+        env:
+          PRIVATE_KEY: ${{ secrets.NEWNYTH_GPG_PRIVATE_KEY }}
+          PASSPHRASE: ${{ secrets.NEWNYTH_GPG_PASSPHRASE }}
+        run: |
+          GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 -p "$GNUPGHOME"
+          printf '%s\n' "$PRIVATE_KEY" | GNUPGHOME="$GNUPGHOME" gpg --batch --import
+          printf '%s\n' "$PASSPHRASE" > "$RUNNER_TEMP/passphrase"
+          chmod 600 "$RUNNER_TEMP/passphrase"
+          FPR=$(GNUPGHOME="$GNUPGHOME" gpg --list-secret-keys --with-colons |
+            awk -F: '/^fpr/ {print $10; exit}')
+          if [ -z "$FPR" ]; then
+            echo "No private key found in NEWNYTH_GPG_PRIVATE_KEY" >&2
+            exit 1
+          fi
+          echo "Imported signing key $FPR"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          echo "NEWNYTH_GPG_FPR=$FPR" >> "$GITHUB_ENV"
+          echo "NEWNYTH_GPG_PASSPHRASE_FILE=$RUNNER_TEMP/passphrase" >> "$GITHUB_ENV"
+
+      - name: Collect packages from published releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-assets
+          gh api "repos/$GITHUB_REPOSITORY/releases" \
+            --jq 'sort_by(.created_at) | .[]
+                  | select(.draft == false and .prerelease == false) | .tag_name' |
+          while read -r tag; do
+            echo "::group::$tag"
+            gh release download "$tag" \
+              -p '*.deb' -p '*.rpm' --dir release-assets \
+              || echo "no .deb/.rpm assets on $tag"
+            echo "::endgroup::"
+          done
+          ls -l release-assets
+
+      - name: Build repository metadata
+        run: scripts/build-distro-repos.sh release-assets pages
+
+      - name: Publish to gh-pages
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # actions/checkout limits the fetch refspec, so name it explicitly.
+          git fetch --depth=1 origin \
+            "+refs/heads/gh-pages:refs/remotes/origin/gh-pages" 2>/dev/null || true
+          if git rev-parse --verify --quiet origin/gh-pages > /dev/null; then
+            git worktree add ghpages origin/gh-pages
+          else
+            # First run: start from an empty tree instead of the source tree.
+            BOOT=$(git commit-tree "$(git hash-object -t tree /dev/null)" \
+              -m "NewNyth package repositories")
+            git worktree add ghpages "$BOOT"
+          fi
+          # Clear the previously generated areas so a deleted release
+          # really disappears; everything in the pages tree is rebuilt.
+          rm -rf ghpages/apt ghpages/dnf ghpages/index.html \
+            ghpages/newnyth.asc ghpages/newnyth.gpg
+          cp -a pages/. ghpages/
+          git -C ghpages add -A
+          if git -C ghpages diff --cached --quiet; then
+            echo "Nothing changed; skipping push."
+          else
+            git -C ghpages commit -m "Publish repositories${TAG:+ for $TAG}"
+            git -C ghpages push origin "HEAD:refs/heads/gh-pages"
+          fi

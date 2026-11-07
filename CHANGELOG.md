@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Signed apt and dnf package repositories served from GitHub Pages
+  (`https://lunabaloona.github.io/NewNyth/`): every published release is
+  mirrored automatically, so Debian/Ubuntu and Fedora/RHEL/openSUSE
+  machines get NewNyth updates through `apt upgrade` / `dnf upgrade`.
+  Repository metadata is GPG-signed; the signing key setup and rotation
+  procedure live in `docs/RELEASING.md`.
+
 ## [0.9.4] - 2026-11-07
 
 ### Added
