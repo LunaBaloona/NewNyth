@@ -100,3 +100,76 @@ cleanup.
 - A broken artifact: fix it on `main` and cut the next patch version.
   Keep the old release visible with a short note pointing at the
   replacement, so nobody installs the broken package by accident.
+
+## Maintaining the package repositories
+
+Published releases are mirrored into signed apt and dnf repositories
+served from the `gh-pages` branch at
+`https://lunabaloona.github.io/NewNyth/` (the landing page there shows
+the setup commands for each distro family). The `Package repositories`
+workflow reruns automatically whenever a release is published, edited,
+unpublished or deleted, and each run rebuilds both repositories from
+scratch out of every published non-prerelease release, so nothing needs
+manual upkeep beyond the secrets below.
+
+The trust model: all repository metadata (apt `Release`, dnf
+`repomd.xml`) is GPG-signed with the repo key, and the signed manifests
+pin the checksum of every package. Individual packages are not
+separately signed (matching how Debian ships `.deb`s).
+
+### One-time setup: the signing key
+
+Generate a throwaway key dedicated to repo signing (no personal
+identity), then store its private half in the repository secrets.
+
+```bash
+# Pick a strong passphrase first and keep it in your password manager.
+read -rsp "Passphrase for the NewNyth repo key: " PASS; echo
+gpg --batch --pinentry-mode loopback --passphrase "$PASS" --gen-key <<EOF
+%echo Generating the NewNyth repository signing key
+Key-Type: RSA
+Key-Length: 3072
+Key-Usage: sign
+Name-Real: NewNyth Repo Signing
+Name-Email: repo@newnyth.local
+Expire-Date: 2y
+Passphrase: $PASS
+%commit
+EOF
+unset PASS
+
+# Note the fingerprint, then export the armored private key.
+gpg --list-secret-keys "NewNyth Repo Signing"
+gpg --armor --export-secret-keys FINGERPRINT > newnyth-repo-key.asc
+```
+
+On GitHub: repository > **Settings** > **Secrets and variables** >
+**Actions** > **New repository secret**, twice:
+
+| Name                     | Value                              |
+| ------------------------ | ---------------------------------- |
+| `NEWNYTH_GPG_PRIVATE_KEY`| entire contents of the `.asc` file |
+| `NEWNYTH_GPG_PASSPHRASE` | the passphrase                     |
+
+Then remove the export: `shred -u newnyth-repo-key.asc`. Keep the public
+half anywhere you like; the workflow publishes it onto the pages site.
+
+### First-time enablement
+
+1. Merge the workflow, then trigger it once by hand: **Actions** >
+   **Package repositories** > **Run workflow**. This creates the
+   `gh-pages` branch with both repositories.
+2. Enable Pages: repository > **Settings** > **Pages** > Source:
+   **Deploy from a branch** > branch `gh-pages`, folder `/ (root)` >
+   **Save**.
+3. Smoke test: open `https://lunabaloona.github.io/NewNyth/` and follow
+   the apt and dnf snippets on a clean VM or container; installing
+   `newnyth` should offer the version from the pages repo.
+
+### Rotating the key
+
+Regenerate the key (same commands) and replace both secrets. Rotation
+is breaking for existing installs: their pinned key can no longer verify
+the re-signed metadata, so every user must re-download the new
+`newnyth.gpg` / `newnyth.asc`. Only rotate if the key actually leaked
+or expires, and announce it in the next release's notes.

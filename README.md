@@ -92,6 +92,28 @@ systemctl --user enable --now nythd
 newnyth
 ```
 
+### Package repositories (apt / dnf)
+
+Debian/Ubuntu and Fedora/RHEL/openSUSE machines can track releases with
+the system package manager; updates then arrive through the usual
+`apt upgrade` / `dnf upgrade`. The repositories are served from
+[GitHub Pages](https://lunabaloona.github.io/NewNyth/) and their
+metadata is GPG-signed:
+
+```bash
+# Debian / Ubuntu (Debian 13+, Ubuntu 24.04+)
+sudo curl -fsSL https://lunabaloona.github.io/NewNyth/newnyth.gpg -o /usr/share/keyrings/newnyth.gpg
+echo "deb [signed-by=/usr/share/keyrings/newnyth.gpg] https://lunabaloona.github.io/NewNyth/apt stable main" |
+  sudo tee /etc/apt/sources.list.d/newnyth.list
+sudo apt update && sudo apt install newnyth
+
+# Fedora / RHEL / openSUSE
+sudo curl -fsSL https://lunabaloona.github.io/NewNyth/dnf/newnyth.repo -o /etc/yum.repos.d/newnyth.repo
+sudo dnf install newnyth
+```
+
+Then run the same follow-up steps as above.
+
 ### Arch Linux
 
 #### First, the Prerequisites
