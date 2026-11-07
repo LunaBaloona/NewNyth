@@ -101,6 +101,10 @@ pub struct NythConfigApp {
     tcu_wizard: Option<TcuWizard>,
     /// Open DCU keep-or-revert dialog (Advanced tab).
     dcu_keep: Option<DcuKeep>,
+    /// Auto-switch card whose header name field is open (pencil button).
+    name_editing: Option<u8>,
+    /// Ask the header name field for keyboard focus once it appears.
+    name_edit_focus: bool,
     /// Last time the active-profile byte was re-read (indicator refresh poll).
     last_profile_poll: std::time::Instant,
     /// Mouse illustrations for the Buttons tab, decoded lazily on first visit.
@@ -143,6 +147,8 @@ impl NythConfigApp {
             capturing_for: None,
             tcu_wizard: None,
             dcu_keep: None,
+            name_editing: None,
+            name_edit_focus: false,
             last_profile_poll: std::time::Instant::now(),
             tex_nyth_top: None,
             tex_nyth_side: None,
@@ -1097,9 +1103,15 @@ impl NythConfigApp {
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| match &mut wizard.stage {
                     TcuWizardStage::Intro => {
+                        // `.strong()` renders in the theme's accent blue
+                        // (egui paints strong text with the active-widget
+                        // colour), matching the dialogs' question lines.
                         ui.label(
-                            "The tracking unit can only be switched on by \
-                             calibrating the surface it works on.",
+                            egui::RichText::new(
+                                "The tracking unit can only be switched on by \
+                                 calibrating the surface it works on.",
+                            )
+                            .strong(),
                         );
                         ui.add_space(8.0);
                         ui.label(
@@ -1108,14 +1120,13 @@ impl NythConfigApp {
                              3. Stop as soon as the test reports back.",
                         );
                         ui.add_space(12.0);
-                        crate::theme::centered_row(ui, 180.0, |ui| {
-                            if ui.button("Start").clicked() {
-                                action = WizardAction::Start;
-                            }
-                            if ui.button("Cancel").clicked() {
-                                action = WizardAction::Abandon;
-                            }
-                        });
+                        let (start, cancel) = crate::theme::centered_pair(ui, "Start", "Cancel");
+                        if start {
+                            action = WizardAction::Start;
+                        }
+                        if cancel {
+                            action = WizardAction::Abandon;
+                        }
                     }
                     TcuWizardStage::Testing { started } => {
                         let left = countdown_left(*started, TCU_TEST_TIMEOUT);
@@ -1138,14 +1149,13 @@ impl NythConfigApp {
                         ui.label(egui::RichText::new("Keep the new calibration?").strong());
                         ui.label(format!("Reverting automatically in {left:.0} s."));
                         ui.add_space(12.0);
-                        crate::theme::centered_row(ui, 180.0, |ui| {
-                            if ui.button("Keep").clicked() {
-                                action = WizardAction::Accept;
-                            }
-                            if ui.button("Discard").clicked() {
-                                action = WizardAction::Discard;
-                            }
-                        });
+                        let (keep, discard) = crate::theme::centered_pair(ui, "Keep", "Discard");
+                        if keep {
+                            action = WizardAction::Accept;
+                        }
+                        if discard {
+                            action = WizardAction::Discard;
+                        }
                     }
                     TcuWizardStage::Done { message } => {
                         ui.label(message.as_str());
@@ -1225,14 +1235,13 @@ impl NythConfigApp {
                         left.max(0.0)
                     ));
                     ui.add_space(12.0);
-                    crate::theme::centered_row(ui, 180.0, |ui| {
-                        if ui.button("Keep").clicked() {
-                            action = Answer::Keep;
-                        }
-                        if ui.button("Revert").clicked() {
-                            action = Answer::Revert;
-                        }
-                    });
+                    let (keep, revert) = crate::theme::centered_pair(ui, "Keep", "Revert");
+                    if keep {
+                        action = Answer::Keep;
+                    }
+                    if revert {
+                        action = Answer::Revert;
+                    }
                 });
             });
         if !open {
@@ -1934,6 +1943,16 @@ impl NythConfigApp {
                             // `self` (the body closure already does), so it
                             // parks the desired change for after the card.
                             let mut new_default: Option<Option<u8>> = None;
+                            // Same parking pattern for the header's inline
+                            // name editor: the closures only see locals.
+                            let editing = self.name_editing == Some(profile_idx);
+                            let focus_open = editing && self.name_edit_focus;
+                            let mut name_buf =
+                                self.profile_name_buf[profile_idx as usize].clone();
+                            let mut toggle_edit = false;
+                            let mut name_changed = false;
+                            let mut close_editor = false;
+                            let mut focus_done = false;
 
                             ui.vertical(|ui| {
                                 ui.set_width(cell_w);
@@ -1947,62 +1966,78 @@ impl NythConfigApp {
                                     .unwrap_or_default();
                                 let header =
                                     format!("Mouse Profile {}{}", profile_idx + 1, name_suffix);
-                                crate::theme::card_with_actions(
+                                crate::theme::card_with_header_and_actions(
                                     ui,
-                                &header,
-                                &mut |ui| {
-                                    let mut def = is_default;
-                                    if ui
-                                        .checkbox(&mut def, "")
-                                        .on_hover_text(
-                                            "Profile to activate when no listed app is focused",
-                                        )
-                                        .changed()
-                                    {
-                                        new_default =
-                                            Some(if def { Some(profile_idx) } else { None });
-                                    }
-                                    ui.label("Default");
-                                },
-                                |ui| {
-                                    // Display-name editor: saved to the PC
-                                    // config immediately (the device has no
-                                    // name field, so nothing has to be
-                                    // written to the mouse).
-                                    let name_w = ui.available_width().max(120.0);
-                                    let name_resp = ui
-                                        .add_sized(
-                                            [name_w, 20.0],
-                                            egui::TextEdit::singleline(
-                                                &mut self.profile_name_buf[profile_idx as usize],
-                                            )
-                                            .hint_text("no name"),
-                                        )
-                                        .on_hover_text(
-                                            "Display name, stored on this computer only. It \
-                                             shows here and as a tooltip on the profile-slot \
-                                             buttons.",
-                                        );
-                                    if name_resp.changed() {
-                                        let i = profile_idx as usize;
-                                        self.profile_name_buf[i] = self.profile_name_buf[i]
-                                            .chars()
-                                            .take(roccat_nyth_profile::config::MAX_PROFILE_NAME_LEN)
-                                            .collect();
-                                        self.state.profile_names.set(
-                                            profile_idx,
-                                            &self.profile_name_buf[i],
-                                        );
-                                        if let Err(e) = self.state.save_profile_names() {
-                                            self.set_status(
-                                                format!("Could not save profile name: {e}"),
-                                                ctx,
+                                    &format!("autoswitch_profile_{}", profile_idx + 1),
+                                    &mut |ui| {
+                                        if !editing {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(header.as_str()).strong(),
+                                                )
+                                                .halign(egui::Align::Center),
                                             );
+                                            return;
                                         }
-                                    }
-                                    ui.separator();
-
-                                    let apps = self
+                                        // Inline rename: the field sits in the
+                                        // header strip itself. Enter or clicking
+                                        // away closes it; the value is committed
+                                        // to the PC config (the device has no
+                                        // name field) after the card.
+                                        ui.with_layout(
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "Mouse Profile {}:",
+                                                        profile_idx + 1
+                                                    ))
+                                                    .strong(),
+                                                );
+                                                let resp = ui.add(
+                                                    egui::TextEdit::singleline(&mut name_buf)
+                                                        .hint_text("no name"),
+                                                );
+                                                if focus_open {
+                                                    resp.request_focus();
+                                                    focus_done = true;
+                                                }
+                                                if resp.changed() {
+                                                    name_changed = true;
+                                                }
+                                                let enter =
+                                                    ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                                if resp.lost_focus() || (enter && resp.has_focus())
+                                                {
+                                                    resp.surrender_focus();
+                                                    close_editor = true;
+                                                }
+                                            },
+                                        );
+                                    },
+                                    &mut |ui| {
+                                        let mut def = is_default;
+                                        if ui
+                                            .checkbox(&mut def, "")
+                                            .on_hover_text(
+                                                "Profile to activate when no listed app is focused",
+                                            )
+                                            .changed()
+                                        {
+                                            new_default =
+                                                Some(if def { Some(profile_idx) } else { None });
+                                        }
+                                        ui.label("Default");
+                                        if ui
+                                            .small_button("✏")
+                                            .on_hover_text("Rename this profile")
+                                            .clicked()
+                                        {
+                                            toggle_edit = true;
+                                        }
+                                    },
+                                    |ui| {
+                                        let apps = self
                                         .state
                                         .autoswitch
                                         .apps_for_profile(profile_idx)
@@ -2093,6 +2128,35 @@ impl NythConfigApp {
                             if let Some(nd) = new_default {
                                 self.state.autoswitch.default_profile = nd;
                                 self.autoswitch_dirty = true;
+                            }
+
+                            // Apply the parked name-editor results now that
+                            // `self` is free again.
+                            if toggle_edit {
+                                self.name_editing = if editing { None } else { Some(profile_idx) };
+                                self.name_edit_focus = !editing;
+                            }
+                            if focus_done {
+                                self.name_edit_focus = false;
+                            }
+                            if close_editor && !toggle_edit {
+                                self.name_editing = None;
+                            }
+                            if name_changed {
+                                let i = profile_idx as usize;
+                                self.profile_name_buf[i] = name_buf
+                                    .chars()
+                                    .take(roccat_nyth_profile::config::MAX_PROFILE_NAME_LEN)
+                                    .collect();
+                                self.state
+                                    .profile_names
+                                    .set(profile_idx, &self.profile_name_buf[i]);
+                                if let Err(e) = self.state.save_profile_names() {
+                                    self.set_status(
+                                        format!("Could not save profile name: {e}"),
+                                        ctx,
+                                    );
+                                }
                             }
                         }
                     });
