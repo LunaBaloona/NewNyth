@@ -1970,6 +1970,18 @@ impl NythConfigApp {
                                     ui,
                                     &format!("autoswitch_profile_{}", profile_idx + 1),
                                     &mut |ui| {
+                                        // Pencil at the very left of the
+                                        // header strip; it toggles the name
+                                        // field in the centre band.
+                                        if ui
+                                            .small_button("✏")
+                                            .on_hover_text("Rename this profile")
+                                            .clicked()
+                                        {
+                                            toggle_edit = true;
+                                        }
+                                    },
+                                    &mut |ui| {
                                         if !editing {
                                             ui.add(
                                                 egui::Label::new(
@@ -2016,6 +2028,13 @@ impl NythConfigApp {
                                         );
                                     },
                                     &mut |ui| {
+                                        // The Default box: the tick is
+                                        // painted with the inactive-widget
+                                        // foreground stroke, so raising it
+                                        // to the accent blue here (this
+                                        // strip only) makes it readable.
+                                        ui.visuals_mut().widgets.inactive.fg_stroke.color =
+                                            crate::theme::ACCENT;
                                         let mut def = is_default;
                                         if ui
                                             .checkbox(&mut def, "")
@@ -2028,13 +2047,6 @@ impl NythConfigApp {
                                                 Some(if def { Some(profile_idx) } else { None });
                                         }
                                         ui.label("Default");
-                                        if ui
-                                            .small_button("✏")
-                                            .on_hover_text("Rename this profile")
-                                            .clicked()
-                                        {
-                                            toggle_edit = true;
-                                        }
                                     },
                                     |ui| {
                                         let apps = self
