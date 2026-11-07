@@ -19,7 +19,7 @@ fn main() -> Result<(), eframe::Error> {
                 return Ok(());
             }
             "--help" | "-h" => {
-                println!("NewNyth — Roccat Nyth Configuration GUI");
+                println!("NewNyth - Roccat Nyth Configuration GUI");
                 println!();
                 println!("Usage: newnyth [OPTIONS]");
                 println!();
@@ -34,13 +34,10 @@ fn main() -> Result<(), eframe::Error> {
         }
     }
 
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "warn");
-    }
-    env_logger::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("NewNyth — Roccat Nyth Configuration")
+        .with_title("NewNyth - Roccat Nyth Configuration")
         .with_inner_size([960.0, 560.0])
         .with_min_inner_size([800.0, 480.0]);
 
@@ -69,10 +66,10 @@ fn load_icon() -> Option<egui::IconData> {
         "/usr/share/icons/hicolor/48x48/apps/newnyth.png",
     ];
     for path in candidates {
-        if let Ok(data) = std::fs::read(path) {
-            if let Some(icon) = decode_png_icon(&data) {
-                return Some(icon);
-            }
+        if let Ok(data) = std::fs::read(path)
+            && let Some(icon) = decode_png_icon(&data)
+        {
+            return Some(icon);
         }
     }
     None

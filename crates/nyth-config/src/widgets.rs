@@ -149,13 +149,14 @@ impl egui::Widget for SegmentedSlider<'_> {
         // Pointer: click jumps, drag follows (travel measured handle-centre
         // to handle-centre, like egui's Slider).
         let travel = (rail.width() - HANDLE_W).max(1.0);
-        if enabled && (response.dragged() || response.clicked()) {
-            if let Some(pos) = response.interact_pointer_pos() {
-                let t = ((pos.x - rail.min.x - HANDLE_W / 2.0) / travel).clamp(0.0, 1.0);
-                let v = quantize(min + t * (max - min), min, max, step);
-                if set_value(value, v) {
-                    response.mark_changed();
-                }
+        if enabled
+            && (response.dragged() || response.clicked())
+            && let Some(pos) = response.interact_pointer_pos()
+        {
+            let t = ((pos.x - rail.min.x - HANDLE_W / 2.0) / travel).clamp(0.0, 1.0);
+            let v = quantize(min + t * (max - min), min, max, step);
+            if set_value(value, v) {
+                response.mark_changed();
             }
         }
         // Keyboard nudge once focused.

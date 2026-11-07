@@ -1,8 +1,8 @@
 //! Device state management for the NewNyth GUI.
 
 use roccat_nyth_hid::protocol::*;
-use roccat_nyth_profile::config::{AutoSwitchConfig, OpenersConfig};
 use roccat_nyth_profile::NythDevice;
+use roccat_nyth_profile::config::{AutoSwitchConfig, OpenersConfig};
 
 /// Cached state for a single profile.
 #[derive(Clone)]
@@ -200,11 +200,7 @@ impl DeviceState {
             Ok(content) => {
                 let app = content.trim().to_string();
                 let _ = std::fs::remove_file(&path);
-                if app.is_empty() {
-                    None
-                } else {
-                    Some(app)
-                }
+                if app.is_empty() { None } else { Some(app) }
             }
             Err(_) => None,
         }

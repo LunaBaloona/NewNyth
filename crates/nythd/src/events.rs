@@ -307,7 +307,7 @@ pub fn simulate_media_key(action: u8) {
         }
         other => {
             log::info!(
-                "Media: unknown action byte {:#04x} — please report this to \
+                "Media: unknown action byte {:#04x} - please report this to \
                  https://github.com/LunaBaloona/NewNyth/issues so we can add support",
                 other
             );
@@ -319,7 +319,7 @@ fn run_media_cmd(program: &str, args: &[&str]) {
     match std::process::Command::new(program).args(args).spawn() {
         Ok(_) => {}
         Err(e) => {
-            log::warn!("Failed to run '{}': {} — is it installed?", program, e);
+            log::warn!("Failed to run '{}': {} - is it installed?", program, e);
         }
     }
 }

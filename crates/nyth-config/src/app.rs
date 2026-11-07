@@ -5,7 +5,7 @@ use eframe::egui;
 use roccat_nyth_hid::display;
 use roccat_nyth_hid::protocol::*;
 
-use crate::state::{hid_key_name, DeviceState, ASSIGNABLE_BUTTON_TYPES, HID_KEYS};
+use crate::state::{ASSIGNABLE_BUTTON_TYPES, DeviceState, HID_KEYS, hid_key_name};
 
 /// Flat-vector Nyth illustrations with the button numbering baked in, used
 /// on the Buttons tab. Rendered in-repo (not Roccat artwork; see ROADMAP).
@@ -371,10 +371,10 @@ impl eframe::App for NythConfigApp {
 
                 // Transient status messages, right-aligned.
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if let Some((ref msg, ts)) = self.status_message {
-                        if ui.input(|i| i.time) - ts < 5.0 {
-                            ui.label(egui::RichText::new(msg).weak().italics());
-                        }
+                    if let Some((ref msg, ts)) = self.status_message
+                        && ui.input(|i| i.time) - ts < 5.0
+                    {
+                        ui.label(egui::RichText::new(msg).weak().italics());
                     }
                 });
             });
@@ -428,9 +428,20 @@ impl eframe::App for NythConfigApp {
                 });
                 return;
             }
-            if matches!(
+            if self.section == Section::Buttons {
+                // The button detail editor and Apply/Revert bar stay pinned
+                // at the bottom of the pane (outside the scroll), so they
+                // remain visible while the three button strips scroll.
+                egui::Panel::bottom("buttons_actions").show(ui, |ui| {
+                    self.ui_buttons_actions(ui, &ctx);
+                });
+                egui::ScrollArea::vertical()
+                    .id_salt("section_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| self.ui_section(ui, &ctx));
+            } else if matches!(
                 self.section,
-                Section::Settings | Section::Buttons | Section::Advanced | Section::Lighting
+                Section::Settings | Section::Advanced | Section::Lighting
             ) {
                 // Long card stacks must stay reachable when the window is
                 // short. Auto-switch keeps its own profile scroll (the save
@@ -472,7 +483,7 @@ impl NythConfigApp {
         };
         let settings = unsafe { &mut *settings };
 
-        ui.heading(format!("Profile {} — Settings", self.selected_profile + 1));
+        ui.heading(format!("Profile {}: Settings", self.selected_profile + 1));
         ui.add_space(8.0);
 
         // Single stacked column, contents centred (Swarm keeps Settings
@@ -576,7 +587,7 @@ impl NythConfigApp {
                 if settings.advanced_sensitivity != 0 {
                     ui.label(
                         egui::RichText::new(
-                            "Separate axes are enabled — set X and Y on the Advanced tab.",
+                            "Separate axes are enabled - set X and Y on the Advanced tab.",
                         )
                         .small()
                         .weak(),
@@ -601,7 +612,7 @@ impl NythConfigApp {
         };
         let settings = unsafe { &mut *settings };
 
-        ui.heading(format!("Profile {} — Advanced", self.selected_profile + 1));
+        ui.heading(format!("Profile {}: Advanced", self.selected_profile + 1));
         ui.add_space(8.0);
 
         // ── Per-profile: split-axis sensitivity ──────────────────────
@@ -806,7 +817,7 @@ impl NythConfigApp {
         };
         let settings = unsafe { &mut *settings };
 
-        ui.heading(format!("Profile {} — Lighting", self.selected_profile + 1));
+        ui.heading(format!("Profile {}: Lighting", self.selected_profile + 1));
         ui.add_space(8.0);
 
         let mut enabled = (settings.lights_enabled & 0x03) == 3;
@@ -932,8 +943,8 @@ impl NythConfigApp {
 
     // ─── Buttons panel (v0.7.1: 4-quadrant layout) ──────────
 
-    fn ui_buttons(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        ui.heading(format!("Profile {} — Buttons", self.selected_profile + 1));
+    fn ui_buttons(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
+        ui.heading(format!("Profile {}: Buttons", self.selected_profile + 1));
         ui.add_space(4.0);
         ui.label(egui::RichText::new("Select a button to configure. Shortcut and Open application have additional options below.").weak().italics());
         ui.add_space(8.0);
@@ -967,7 +978,7 @@ impl NythConfigApp {
             // few points wider than the viewport, egui shrinks the outer
             // scrollbar to a sliver, so account for every point here.
             let junction = gap + ui.spacing().item_spacing.x;
-            let combo_w = 290.0f32;
+            let combo_w = 292.0f32;
             let img_w = (avail_w - 2.0 * combo_w - 2.0 * junction - 2.0).clamp(220.0, 560.0);
             let block_w = 2.0 * combo_w + img_w + 2.0 * junction;
             let pad = ((avail_w - block_w) / 2.0).max(0.0);
@@ -990,15 +1001,15 @@ impl NythConfigApp {
                 // ── Column 1: Standard layer ────────────────
                 ui.vertical(|ui| {
                     ui.set_width(combo_w);
-                    main_card_h = crate::theme::card(ui, "Standard — Main buttons", |ui| {
-                        self.button_grid(ui, buttons, 0..8, "btn_std_main", 0);
+                    main_card_h = crate::theme::card(ui, "Standard | Main buttons", |ui| {
+                        self.button_grid(ui, buttons, 0..8, "btn_std_main", 0, true);
                     })
                     .response
                     .rect
                     .height();
                     ui.add_space(6.0);
-                    side_card_h = crate::theme::card(ui, "Standard — Side buttons", |ui| {
-                        self.button_grid(ui, buttons, 8..20, "btn_std_side", 4);
+                    side_card_h = crate::theme::card(ui, "Standard | Side buttons", |ui| {
+                        self.button_grid(ui, buttons, 8..20, "btn_std_side", 4, false);
                     })
                     .response
                     .rect
@@ -1010,12 +1021,12 @@ impl NythConfigApp {
                 // ── Column 2: EasyShift layer ───────────────
                 ui.vertical(|ui| {
                     ui.set_width(combo_w);
-                    crate::theme::card(ui, "EasyShift — Main buttons", |ui| {
-                        self.button_grid(ui, buttons, 20..28, "btn_es_main", 0);
+                    crate::theme::card(ui, "EasyShift | Main buttons", |ui| {
+                        self.button_grid(ui, buttons, 20..28, "btn_es_main", 0, true);
                     });
                     ui.add_space(6.0);
-                    crate::theme::card(ui, "EasyShift — Side buttons", |ui| {
-                        self.button_grid(ui, buttons, 28..40, "btn_es_side", 4);
+                    crate::theme::card(ui, "EasyShift | Side buttons", |ui| {
+                        self.button_grid(ui, buttons, 28..40, "btn_es_side", 4, false);
                     });
                 });
 
@@ -1036,7 +1047,20 @@ impl NythConfigApp {
             });
         }
 
-        ui.add_space(4.0);
+        // The detail editor + Apply/Revert bar are pinned at the bottom of
+        // the pane by the CentralPanel path (see `ui_buttons_actions`),
+        // outside this scroll body.
+    }
+
+    /// Detail editor + Apply/Revert bar for the Buttons tab, shown in a
+    /// pinned bottom panel so they stay visible while the strips scroll.
+    fn ui_buttons_actions(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let buttons = match self.pending_buttons.as_mut() {
+            Some(b) => b as *mut ProfileButtons,
+            None => return,
+        };
+        let buttons = unsafe { &mut *buttons };
+
         ui.separator();
 
         // ── Detail editor for selected button ───────
@@ -1053,7 +1077,9 @@ impl NythConfigApp {
         range: std::ops::Range<usize>,
         grid_id: &str,
         group_every: usize,
+        numbered: bool,
     ) {
+        let range_start = range.start;
         // Long grids (12-key side keypads) are split into groups of
         // `group_every` rows separated by an accent-blue rule, mirroring
         // the 4×3 keypad blocks on the physical mouse.
@@ -1092,22 +1118,37 @@ impl NythConfigApp {
                             display::BUTTON_NAMES[i]
                         };
 
-                        // Button name (clickable to select), pinned width so
-                        // the dropdown column lines up across the groups.
-                        let name_label = if is_selected {
-                            egui::RichText::new(name).strong()
+                        // Main-button rows carry the illustration number as
+                        // a "N: " prefix so the cards and the numbered mouse
+                        // art cross-reference (side grids self-number).
+                        let name_text = if numbered {
+                            format!("{}: {}", i - range_start + 1, name)
                         } else {
-                            egui::RichText::new(name)
+                            name.to_string()
                         };
-                        if ui
-                            .add_sized(
-                                egui::vec2(84.0, row_h),
-                                egui::Label::new(name_label)
-                                    .selectable(false)
-                                    .sense(egui::Sense::click()),
+
+                        // Button name (clickable to select), pinned width so
+                        // the dropdown column lines up across the groups,
+                        // left-aligned inside that column.
+                        let name_label = if is_selected {
+                            egui::RichText::new(name_text).strong()
+                        } else {
+                            egui::RichText::new(name_text)
+                        };
+                        let name_response = ui
+                            .allocate_ui_with_layout(
+                                egui::vec2(96.0, row_h),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(name_label)
+                                            .selectable(false)
+                                            .sense(egui::Sense::click()),
+                                    )
+                                },
                             )
-                            .clicked()
-                        {
+                            .inner;
+                        if name_response.clicked() {
                             self.selected_button = Some(i);
                             // Load opener text if this is an Open application button.
                             self.opener_edit_buf = self
@@ -1579,7 +1620,7 @@ impl NythConfigApp {
                             Err(e) => {
                                 log::warn!("Saved, but could not notify daemon: {}", e);
                                 self.set_status(
-                                    "Saved — daemon unreachable, it will reload the file shortly",
+                                    "Saved - daemon unreachable, it will reload the file shortly",
                                     ctx,
                                 );
                             }

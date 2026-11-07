@@ -34,34 +34,34 @@ Note that because I started this for my own use, it's built for use on KDE and W
 
 ## Screenshots
 
-**Settings panel** — CPI levels, polling rate, and sensitivity.
+**Settings panel** - CPI levels, polling rate, and sensitivity.
 
 ![NewNyth settings panel](docs/screenshots/NewNyth_Main_UIv3.png)
 
 
-**Buttons panel** — Map your buttons to various keys and functions.
+**Buttons panel** - Map your buttons to various keys and functions.
 
 ![NewNyth button mapping panel](docs/screenshots/NewNyth_Mapping_UIv3.png)
 
 
-**Lighting panel** — Colours, light effects and colour effects for both light zones.
+**Lighting panel** - Colours, light effects and colour effects for both light zones.
 
 ![NewNyth lighting panel](docs/screenshots/Lighting_UIv3.png)
 
 
-**Profile Auto-switch panel** — Control how we switch profiles depending on the application you're on.
+**Profile Auto-switch panel** - Control how we switch profiles depending on the application you're on.
 
 ![NewNyth profile auto-switch panel](docs/screenshots/NewNyth_ProfileAutoSwitch_UIv3.png)
 
 
-**NewNyth Mini** — A companion app that simply lets you select a profile. 
+**NewNyth Mini** - A companion app that simply lets you select a profile. 
 
 ![NewNyth Mini profile switcher](docs/screenshots/NewNyth_Mini.png)
 
 
 ## Installation
 
-Pick whatever matches your distro — everything ships the same four programs
+Pick whatever matches your distro - everything ships the same four programs
 and sets up the udev rule, `roccat` group, systemd user service and launcher
 entries.
 
@@ -129,10 +129,16 @@ Alternative manual install is also included (for those without Arch or prefer no
 ./install.sh
 ```
 
+To remove everything that script installed again, run `./install.sh --uninstall`
+(user config in `~/.config/newnyth` and the `roccat` group are left in place).
+For a complete cleanup, `./install.sh --fulluninstall` (short: `-fu`) also
+deletes that config directory and removes the `roccat` group and your
+membership in it.
+
 #### After installation
 
 ```bash
-# Start the background daemon
+# Start the background daemon (already done for you by ./install.sh)
 systemctl --user enable --now nythd
 
 # Launch the main GUI
@@ -152,8 +158,10 @@ newnyth-mini
 | Arch `makepkg` | `git pull` in the checkout, then `makepkg -si` |
 | `install.sh` | `git pull`, then `./install.sh` again |
 
-> An AUR package (`yay -S newnyth`) and distro package repos are planned —
-> track progress in the [issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
+> Everything is distributed from this repository's
+> [Releases page](https://github.com/LunaBaloona/NewNyth/releases). AUR and
+> distro package repos are on hold while the project is small; track interest
+> and progress in the [issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
 
 ## Components
 
@@ -164,21 +172,21 @@ newnyth-mini
 | `newnyth-mini` | Minimal floating window for quick profile switching |
 | `nythctl` | A CLI for scripts and automation |
 
-### `newnyth` — configuration GUI
+### `newnyth` - configuration GUI
 
-**Settings panel** — CPI levels 1–5 (200–12,000 DPI, with individual enable toggles and active-level selector), polling rates (125/250/500/1000 Hz), and of course sensitivity (with optional independent X/Y axes).
+**Settings panel** - CPI levels 1–5 (200–12,000 DPI, with individual enable toggles and active-level selector), polling rates (125/250/500/1000 Hz), and of course sensitivity (with optional independent X/Y axes).
 
-**Lighting panel** — On/Off toggle, custom colour pickers for both light zones (logo and bottom), light effects (fully lit, blinking, breathing, heartbeat) with speed control, and colour effects (off, simultaneously, up, down). (May need a bit more work, but who uses RGB anymore)
+**Lighting panel** - On/Off toggle, custom colour pickers for both light zones (logo and bottom), light effects (fully lit, blinking, breathing, heartbeat) with speed control, and colour effects (off, simultaneously, up, down). (May need a bit more work, but who uses RGB anymore)
 
-**Buttons panel** — Remap all 40 buttons (20 standard + 20 EasyShift layer). Side-by-side columns for easy comparison, grouped by main buttons (left, right, middle, wheel up/down, top, fin left/right) and side buttons (Side 1–12 with separators every 4 buttons). Select a button to configure:
+**Buttons panel** - Remap all 40 buttons (20 standard + 20 EasyShift layer). Side-by-side columns for easy comparison, grouped by main buttons (left, right, middle, wheel up/down, top, fin left/right) and side buttons (Side 1–12 with separators every 4 buttons). Select a button to configure:
 
-- **Shortcut** — Modifier checkboxes (Ctrl/Shift/Alt/Win) + 90+ HID keycodes including extended function keys F13–F24, numpad, arrows, system keys
-- **Open application** — Launch any command when the button is pressed (now stored in `~/.config/newnyth/openers.json`)
+- **Shortcut** - Modifier checkboxes (Ctrl/Shift/Alt/Win) + 90+ HID keycodes including extended function keys F13–F24, numpad, arrows, system keys
+- **Open application** - Launch any command when the button is pressed (now stored in `~/.config/newnyth/openers.json`)
 - Plus 40+ built-in actions: scrolling, media keys, profile cycling, CPI up/down, EasyShift, EasyAim, and more
 
-**Auto-switch panel** — Yes, just like Swarm used to do on MS Windows. With NewNyth can configure up to 10 application bindings per profile. Click "Capture window" and then click any application window — its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active ~(NB this was built on KDE Plasma with Wayland. I don't expect this'll work on non-Wayland DEs).
+**Auto-switch panel** - Yes, just like Swarm used to do on MS Windows. With NewNyth can configure up to 10 application bindings per profile. Click "Capture window" and then click any application window - its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active ~(NB this was built on KDE Plasma with Wayland. I don't expect this'll work on non-Wayland DEs).
 
-### `nythd` — event daemon
+### `nythd` - event daemon
 
 The daemon:
 - Reads raw hidraw events from all Nyth interfaces
@@ -197,7 +205,7 @@ systemctl --user status nythd
 journalctl --user -u nythd -f
 ```
 
-### `nythctl` — CLI
+### `nythctl` - CLI
 
 ```bash
 nythctl                     # Full device status overview
@@ -247,7 +255,7 @@ All stored under `~/.config/newnyth/`:
 NewNyth/
 ├── Cargo.toml                     # Workspace root
 ├── PKGBUILD                       # Arch Linux package
-├── install.sh                     # Manual install script (builds from source)
+├── install.sh                     # Manual install/uninstall script (builds from source)
 ├── LICENSE                        # GPL-2.0
 ├── NOTICE                         # Attribution
 ├── README.md
@@ -333,7 +341,7 @@ Check the daemon detected KWin:
 journalctl --user -u nythd | grep -i "kwin\|window"
 ```
 
-You should see `Loaded KWin watcher script` and `KWin watcher script started`. If you see repeated retry messages, KWin D-Bus isn't available yet — wait a few seconds after login.
+You should see `Loaded KWin watcher script` and `KWin watcher script started`. If you see repeated retry messages, KWin D-Bus isn't available yet - wait a few seconds after login.
 
 ### Media keys do nothing
 
@@ -347,7 +355,7 @@ Check the daemon receives the event when you press a media button:
 
 ```bash
 journalctl --user -u nythd -f
-# Press the button — you should see "Media: Play/Pause" or similar
+# Press the button - you should see "Media: Play/Pause" or similar
 ```
 
 ## Licence
@@ -356,6 +364,6 @@ GPL-2.0-or-later, matching the original `roccat-tools` licence. See [LICENSE](LI
 
 ## Acknowledgements
 
-- **Stefan Achatz** — original author of [`roccat-tools`](https://sourceforge.net/projects/roccat/), without which this port would not exist
-- **The egui project** — for an excellent immediate-mode GUI framework
-- **KDE Plasma team** — for KWin's scripting API which makes window tracking possible on Wayland
+- **Stefan Achatz** - original author of [`roccat-tools`](https://sourceforge.net/projects/roccat/), without which this port would not exist
+- **The egui project** - for an excellent immediate-mode GUI framework
+- **KDE Plasma team** - for KWin's scripting API which makes window tracking possible on Wayland

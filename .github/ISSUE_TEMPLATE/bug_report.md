@@ -22,7 +22,7 @@ What actually happened.
 
 ## System information
 
-- **NewNyth version:** (e.g. 0.7.1) — run `newnyth --version` or check the GUI sidebar
+- **NewNyth version:** (e.g. 0.7.1) - run `newnyth --version` or check the GUI sidebar
 - **Mouse model:** Roccat Nyth Black / Roccat Nyth White
 - **Firmware version:** (shown in the GUI left-sidebar, e.g. 1.38)
 - **OS Distribution:** (e.g. Arch Linux)

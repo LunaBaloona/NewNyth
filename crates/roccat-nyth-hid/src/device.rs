@@ -176,10 +176,10 @@ fn detect_interface_number(device_path: &Path) -> Option<u8> {
         }
 
         // After the colon: "1.0" → interface is the part after the last dot.
-        if let Some(dot_pos) = after_colon.rfind('.') {
-            if let Ok(iface) = after_colon[dot_pos + 1..].parse::<u8>() {
-                return Some(iface);
-            }
+        if let Some(dot_pos) = after_colon.rfind('.')
+            && let Ok(iface) = after_colon[dot_pos + 1..].parse::<u8>()
+        {
+            return Some(iface);
         }
     }
     None
@@ -203,10 +203,14 @@ mod tests {
 
     #[test]
     fn interface_detection_from_path() {
-        let path = Path::new("/sys/devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.0/0003:1E7D:2E7D.0001/hidraw/hidraw7");
+        let path = Path::new(
+            "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.0/0003:1E7D:2E7D.0001/hidraw/hidraw7",
+        );
         assert_eq!(detect_interface_number(path), Some(0));
 
-        let path = Path::new("/sys/devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.1/0003:1E7D:2E7D.0002/hidraw/hidraw8");
+        let path = Path::new(
+            "/sys/devices/pci0000:00/0000:00:14.0/usb1/1-2/1-2:1.1/0003:1E7D:2E7D.0002/hidraw/hidraw8",
+        );
         assert_eq!(detect_interface_number(path), Some(1));
 
         // PCI addresses must NOT match.
