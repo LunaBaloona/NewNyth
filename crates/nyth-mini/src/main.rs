@@ -5,6 +5,7 @@
 use eframe::egui;
 use roccat_nyth_hid::protocol::NYTH_PROFILE_NUM;
 use roccat_nyth_profile::NythDevice;
+use roccat_nyth_profile::config::ProfileNames;
 
 fn main() -> Result<(), eframe::Error> {
     let args: Vec<String> = std::env::args().collect();
@@ -57,6 +58,10 @@ struct MiniApp {
     connected: bool,
     status: Option<String>,
     last_poll: std::time::Instant,
+    /// PC-side profile display names (read-only here; editing lives in
+    /// the main app). Re-read with every device poll, so names rename
+    /// themselves in the tooltips while both apps run.
+    profile_names: ProfileNames,
 }
 
 impl MiniApp {
@@ -74,6 +79,7 @@ impl MiniApp {
             connected,
             status: None,
             last_poll: std::time::Instant::now(),
+            profile_names: ProfileNames::load(),
         }
     }
 
@@ -126,6 +132,9 @@ impl eframe::App for MiniApp {
         if self.last_poll.elapsed() >= std::time::Duration::from_secs(1) {
             self.last_poll = std::time::Instant::now();
             self.refresh_active_profile();
+            // Display names are edited in the main app; re-reading the
+            // tiny config file each poll keeps the tooltips fresh.
+            self.profile_names = ProfileNames::load();
         }
 
         egui::CentralPanel::default().show(ui, |ui| {
@@ -162,7 +171,11 @@ impl eframe::App for MiniApp {
                                 egui::Button::new(format!("{}", i + 1))
                             };
 
-                            let response = ui.add_sized([34.0, 28.0], btn);
+                            let tip = match self.profile_names.get(i) {
+                                Some(name) => format!("Profile {}: {}", i + 1, name),
+                                None => format!("Profile {}", i + 1),
+                            };
+                            let response = ui.add_sized([34.0, 28.0], btn).on_hover_text(tip);
                             if response.clicked() && !is_active {
                                 self.switch_profile(i);
                             }
