@@ -145,10 +145,10 @@ impl AutoSwitchConfig {
     pub fn profile_for_app(&self, app_class: &str) -> Option<u8> {
         let app_lower = app_class.to_lowercase();
         for (key, apps) in &self.profiles {
-            if apps.iter().any(|a| a.to_lowercase() == app_lower) {
-                if let Ok(idx) = key.parse::<u8>() {
-                    return Some(idx);
-                }
+            if apps.iter().any(|a| a.to_lowercase() == app_lower)
+                && let Ok(idx) = key.parse::<u8>()
+            {
+                return Some(idx);
             }
         }
         None

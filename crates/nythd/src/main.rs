@@ -14,8 +14,8 @@ mod events;
 mod window_watcher;
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use roccat_nyth_profile::NythDevice;
@@ -43,7 +43,7 @@ fn main() {
     }
 
     if show_help {
-        println!("nythd — NewNyth event daemon for the Roccat Nyth mouse");
+        println!("nythd - NewNyth event daemon for the Roccat Nyth mouse");
         println!();
         println!("Usage: nythd [OPTIONS]");
         println!();
@@ -58,12 +58,17 @@ fn main() {
         return;
     }
 
-    if verbose {
-        std::env::set_var("RUST_LOG", "trace");
-    } else if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", if foreground { "info" } else { "warn" });
-    }
-    env_logger::init();
+    // Edition 2024 made `set_var` unsafe; env_logger applies the RUST_LOG
+    // default itself, so no environment mutation is needed at startup.
+    let default_filter = if verbose {
+        "trace"
+    } else if foreground {
+        "info"
+    } else {
+        "warn"
+    };
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_filter))
+        .init();
 
     log::info!(
         "NewNyth daemon (nythd) {} starting",
@@ -157,7 +162,7 @@ fn acquire_instance_lock(lock_path: &Path) -> Result<std::fs::File, String> {
     if rc != 0 {
         return Err(format!(
             "Another nythd instance is already running (lock held via {}; \
-             running duplicate daemons makes every button press fire twice) — \
+             running duplicate daemons makes every button press fire twice) - \
              find it with 'pgrep -af nythd', stop it (e.g. 'systemctl --user stop nythd' \
              or 'pkill -x nythd') before starting another",
             lock_path.display()
@@ -327,7 +332,7 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
             openers = roccat_nyth_profile::config::OpenersConfig::load();
             autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
             log::info!(
-                "Config files changed — reloaded (auto-switch: {})",
+                "Config files changed - reloaded (auto-switch: {})",
                 if autoswitch.enabled {
                     "enabled"
                 } else {
@@ -363,23 +368,23 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
                             Err(e) => log::warn!("Auto-switch failed: {}", e),
                         }
                     }
-                } else if let Some(default_idx) = autoswitch.default_profile {
-                    if default_idx != current_profile {
-                        log::trace!(
-                            "Auto-switch: {} (no match) → default profile {}",
-                            app_class,
-                            default_idx + 1
-                        );
-                        match nyth.write_active_profile(default_idx) {
-                            Ok(()) => {
-                                current_profile = default_idx;
-                                if let Some(ref dbus) = dbus {
-                                    dbus.set_active_profile(default_idx + 1);
-                                    dbus.emit_profile_changed(default_idx + 1);
-                                }
+                } else if let Some(default_idx) = autoswitch.default_profile
+                    && default_idx != current_profile
+                {
+                    log::trace!(
+                        "Auto-switch: {} (no match) → default profile {}",
+                        app_class,
+                        default_idx + 1
+                    );
+                    match nyth.write_active_profile(default_idx) {
+                        Ok(()) => {
+                            current_profile = default_idx;
+                            if let Some(ref dbus) = dbus {
+                                dbus.set_active_profile(default_idx + 1);
+                                dbus.emit_profile_changed(default_idx + 1);
                             }
-                            Err(e) => log::warn!("Auto-switch default failed: {}", e),
                         }
+                        Err(e) => log::warn!("Auto-switch default failed: {}", e),
                     }
                 }
             }
@@ -430,7 +435,7 @@ fn handle_event(
             let number = profile_index + 1;
             log::info!("Profile changed to {}", number);
 
-            if let Some(ref dbus) = dbus {
+            if let Some(dbus) = dbus {
                 dbus.emit_profile_changed(number);
             }
 
@@ -493,7 +498,7 @@ fn handle_event(
                 }
             } else {
                 log::info!(
-                    "Open application for button {} — no command configured (profile {})",
+                    "Open application for button {} - no command configured (profile {})",
                     button_index,
                     *current_profile + 1
                 );
