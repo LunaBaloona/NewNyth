@@ -15,7 +15,6 @@ roccat-nyth-hid = { path = "../roccat-nyth-hid" }
 roccat-nyth-profile = { path = "../roccat-nyth-profile" }
 log.workspace = true
 env_logger.workspace = true
-dbus.workspace = true
-dbus-crossroads.workspace = true
+zbus.workspace = true
 nix.workspace = true
 bytemuck.workspace = true

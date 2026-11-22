@@ -23,7 +23,9 @@ use roccat_nyth_profile::NythDevice;
 use crate::dbus_service::NythDbusServer;
 use crate::events::NythEvent;
 
-/// How often to poll for D-Bus messages when no events arrive (ms).
+/// How often the main loop polls (device state, config files, window
+/// events) in ms. D-Bus dispatch no longer needs pumping: zbus drives
+/// its own executor thread.
 const DBUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// How long to wait between device scan retries.
@@ -288,10 +290,7 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
 
     // Main event loop.
     while running.load(Ordering::Relaxed) {
-        // Process D-Bus messages.
         if let Some(ref dbus) = dbus {
-            dbus.process(DBUS_POLL_INTERVAL);
-
             let state = dbus.state();
             if state.active_profile != current_profile + 1 && state.active_profile >= 1 {
                 let new_index = state.active_profile - 1;
@@ -319,9 +318,12 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
                 );
             }
             dbus.clear_reload_flags();
-        } else {
-            std::thread::sleep(DBUS_POLL_INTERVAL);
         }
+
+        // Pace for the loop. D-Bus dispatch happens on zbus's own
+        // executor thread now; this loop just polls (was: the blocking
+        // dbus.process(DBUS_POLL_INTERVAL) pump).
+        std::thread::sleep(DBUS_POLL_INTERVAL);
 
         // Config file watch (belt and braces alongside the D-Bus nudge):
         // reload whenever a config file was written — by the GUI, a second

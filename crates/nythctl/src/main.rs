@@ -147,23 +147,25 @@ fn format_light(light: &Light) -> String {
 /// Notify the nythd daemon about a profile change via D-Bus.
 /// Silently does nothing if the daemon isn't running or D-Bus is unavailable.
 fn notify_daemon_profile_changed(profile_number: u8) {
-    let conn = match dbus::blocking::Connection::new_session() {
-        Ok(c) => c,
-        Err(_) => return, // No session bus — daemon not reachable.
+    let Ok(conn) = zbus::blocking::connection::Builder::session()
+        .map(|b| b.method_timeout(std::time::Duration::from_millis(500)))
+        .and_then(|b| b.build())
+    else {
+        return; // No session bus — daemon not reachable.
     };
 
-    let proxy = conn.with_proxy(
-        "org.roccat.Nyth",
-        "/org/roccat/Nyth",
-        std::time::Duration::from_millis(500),
-    );
+    let proxy: zbus::blocking::Proxy<'_> = match zbus::blocking::proxy::Builder::new(&conn)
+        .destination("org.roccat.Nyth")
+        .and_then(|b| b.path("/org/roccat/Nyth"))
+        .and_then(|b| b.interface("org.roccat.Nyth"))
+        .and_then(|b| b.build())
+    {
+        Ok(p) => p,
+        Err(_) => return,
+    };
 
-    // Call ProfileChangedOutside(number) — fire-and-forget.
-    let _: Result<(), _> = proxy.method_call(
-        "org.roccat.Nyth",
-        "ProfileChangedOutside",
-        (profile_number,),
-    );
+    // Call ProfileChangedOutside(number) - result is advisory only.
+    let _: Result<(), _> = proxy.call("ProfileChangedOutside", &(profile_number,));
 }
 
 // ─── Commands ───────────────────────────────────────────────────────

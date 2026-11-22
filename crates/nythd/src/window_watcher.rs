@@ -12,7 +12,7 @@ use std::process::Command;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use dbus::blocking::Connection;
+use zbus::blocking::{Connection, Proxy, connection::Builder, proxy::Builder as ProxyBuilder};
 
 use roccat_nyth_profile::config;
 
@@ -45,6 +45,25 @@ pub fn active_window_path() -> std::path::PathBuf {
     config::config_dir().join("active_window.txt")
 }
 
+/// Session connection for calling KWin. zbus 5 applies call timeouts per
+/// connection (dbus 0.9 applied them per proxy), so each call site opens
+/// its own short-lived connection with the timeout it wants.
+fn kwin_connection(timeout: Duration) -> Result<Connection, zbus::Error> {
+    Builder::session()
+        .map(|b| b.method_timeout(timeout))
+        .and_then(|b| b.build())
+}
+
+fn kwin_proxy<'a>(
+    conn: &'a Connection,
+    path: &'a str,
+    iface: &'a str,
+) -> Result<Proxy<'a>, zbus::Error> {
+    let b = ProxyBuilder::new(conn).destination("org.kde.KWin")?;
+    let b = b.path(path)?;
+    b.interface(iface)?.build()
+}
+
 /// Try to install the KWin script once. Returns true on success.
 fn try_install_kwin_script() -> bool {
     let dir = config::config_dir();
@@ -57,43 +76,37 @@ fn try_install_kwin_script() -> bool {
         return false;
     }
 
-    let conn = match Connection::new_session() {
+    let conn = match kwin_connection(Duration::from_secs(2)) {
         Ok(c) => c,
         Err(_) => return false,
     };
 
-    let proxy = conn.with_proxy("org.kde.KWin", "/Scripting", Duration::from_secs(2));
+    let proxy = match kwin_proxy(&conn, "/Scripting", "org.kde.kwin.Scripting") {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
 
     // Unload any previous instance.
-    let _: Result<(bool,), _> = proxy.method_call(
-        "org.kde.kwin.Scripting",
-        "unloadScript",
-        ("newnyth".to_string(),),
-    );
+    let _: Result<bool, _> = proxy.call("unloadScript", &("newnyth",));
 
     // Load the script.
-    let result: Result<(i32,), _> = proxy.method_call(
-        "org.kde.kwin.Scripting",
+    let result: Result<i32, _> = proxy.call(
         "loadScript",
-        (
-            script_path.to_string_lossy().to_string(),
-            "newnyth".to_string(),
-        ),
+        &(script_path.to_string_lossy().to_string(), "newnyth"),
     );
 
     match result {
-        Ok((script_id,)) => {
+        Ok(script_id) => {
             log::info!("Loaded KWin watcher script (id={})", script_id);
 
             // Method 1: call run() on the individual script object.
             // This works even after KWin's initial startup phase has passed.
-            let script_proxy = conn.with_proxy(
-                "org.kde.KWin",
-                format!("/Scripting/Script{}", script_id),
-                Duration::from_secs(2),
-            );
+            let script_obj = format!("/Scripting/Script{}", script_id);
             let run_result: Result<(), _> =
-                script_proxy.method_call("org.kde.kwin.Script", "run", ());
+                match kwin_proxy(&conn, &script_obj, "org.kde.kwin.Script") {
+                    Ok(script_proxy) => script_proxy.call("run", &()),
+                    Err(e) => Err(e),
+                };
 
             match run_result {
                 Ok(()) => {
@@ -106,8 +119,7 @@ fn try_install_kwin_script() -> bool {
             }
 
             // Method 2: fall back to start() on /Scripting.
-            let start_result: Result<(), _> =
-                proxy.method_call("org.kde.kwin.Scripting", "start", ());
+            let start_result: Result<(), _> = proxy.call("start", &());
 
             if let Err(e) = start_result {
                 log::warn!("Both run() and start() failed: {e}");
@@ -164,16 +176,13 @@ pub fn start_kwin_installer() {
 
 /// Unload the KWin script on shutdown.
 pub fn unload_kwin_script() {
-    let conn = match Connection::new_session() {
-        Ok(c) => c,
-        Err(_) => return,
+    let Ok(conn) = kwin_connection(Duration::from_secs(1)) else {
+        return;
     };
-    let proxy = conn.with_proxy("org.kde.KWin", "/Scripting", Duration::from_secs(1));
-    let _: Result<(bool,), _> = proxy.method_call(
-        "org.kde.kwin.Scripting",
-        "unloadScript",
-        ("newnyth".to_string(),),
-    );
+    let Ok(proxy) = kwin_proxy(&conn, "/Scripting", "org.kde.kwin.Scripting") else {
+        return;
+    };
+    let _: Result<bool, _> = proxy.call("unloadScript", &("newnyth",));
     log::info!("Unloaded KWin watcher script");
 }
 
