@@ -225,6 +225,62 @@ pub fn xdg_folder_for_windows_subtype(subtype: u8) -> Option<&'static str> {
     }
 }
 
+/// Spawn a short-lived helper program and reap it on a helper thread so it
+/// never lingers as a zombie. Fire-and-forget `spawn()` without a `wait()`
+/// leaves the exited child as `<defunct>`; the daemon runs for weeks, so
+/// unreaped children pile up until the process table complains.
+pub fn spawn_reaped(program: &str, args: &[&str]) -> Result<(), std::io::Error> {
+    let mut child = std::process::Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let name = program.to_string();
+    std::thread::spawn(move || match child.wait() {
+        Ok(status) if !status.success() => {
+            log::debug!("Helper '{name}' exited with {status}");
+        }
+        Ok(_) => {}
+        Err(e) => log::warn!("Failed to reap helper '{name}': {e}"),
+    });
+    Ok(())
+}
+
+/// Launch a user-facing program (GUI, file manager, application buttons)
+/// outside the daemon's systemd control group via a transient scope.
+/// Without the scope the unit's default `KillMode=control-group` kills every
+/// application the mouse launched whenever nythd restarts. `systemd-run`
+/// still keeps the process as our child (cgroup isolation only), so it is
+/// reaped like any other helper. Falls back to a plain spawn on systems
+/// without systemd-run.
+pub fn launch_app(program: &str, args: &[&str]) -> Result<(), std::io::Error> {
+    if systemd_run_available() {
+        let mut wrapped: Vec<&str> = Vec::with_capacity(args.len() + 5);
+        wrapped.extend_from_slice(&["--user", "--scope", "--collect", "--"]);
+        wrapped.push(program);
+        wrapped.extend_from_slice(args);
+        match spawn_reaped("systemd-run", &wrapped) {
+            Ok(()) => return Ok(()),
+            Err(e) => log::debug!("systemd-run unavailable ({e}); spawning directly"),
+        }
+    }
+    spawn_reaped(program, args)
+}
+
+fn systemd_run_available() -> bool {
+    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        std::process::Command::new("systemd-run")
+            .arg("--version")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    })
+}
+
 /// Open a folder using xdg-open (works on KDE Plasma and other DEs).
 pub fn open_xdg_folder(xdg_name: &str) {
     // xdg-user-dir returns the path for the given XDG directory
@@ -237,7 +293,9 @@ pub fn open_xdg_folder(xdg_name: &str) {
             let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if !path.is_empty() {
                 log::info!("Opening folder: {}", path);
-                let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
+                if let Err(e) = launch_app("xdg-open", &[&path]) {
+                    log::warn!("Failed to open {}: {}", path, e);
+                }
             }
         }
         _ => {
@@ -248,13 +306,16 @@ pub fn open_xdg_folder(xdg_name: &str) {
 
 /// Send a desktop notification via notify-send (available on KDE Plasma).
 pub fn send_notification(summary: &str, body: &str) {
-    let _ = std::process::Command::new("notify-send")
-        .arg("--app-name=nythd")
-        .arg("--icon=input-mouse")
-        .arg("--expire-time=2000")
-        .arg(summary)
-        .arg(body)
-        .spawn();
+    let _ = spawn_reaped(
+        "notify-send",
+        &[
+            "--app-name=nythd",
+            "--icon=input-mouse",
+            "--expire-time=2000",
+            summary,
+            body,
+        ],
+    );
 }
 
 /// Simulate a multimedia key action.

@@ -449,6 +449,11 @@ fn handle_event(
             log::info!("Profile changed to {}", number);
 
             if let Some(dbus) = dbus {
+                // Keep the D-Bus mirror of the active profile in sync. Without
+                // this the main loop's stale-state check below reads the old
+                // number, mistakes it for an external change, and reverts
+                // current_profile, so later decisions use the wrong profile.
+                dbus.set_active_profile(number);
                 dbus.emit_profile_changed(number);
             }
 
@@ -483,9 +488,8 @@ fn handle_event(
 
         NythEvent::OpenDriver => {
             log::info!("Open driver/config requested");
-            let _ = std::process::Command::new("newnyth")
-                .spawn()
-                .or_else(|_| std::process::Command::new("nythctl").spawn());
+            let _ =
+                events::launch_app("newnyth", &[]).or_else(|_| events::launch_app("nythctl", &[]));
         }
 
         NythEvent::OpenApplication { button_index } => {
@@ -498,7 +502,7 @@ fn handle_event(
                 // Split command into program + args (shell-style).
                 let parts: Vec<&str> = command.split_whitespace().collect();
                 if let Some((program, args)) = parts.split_first() {
-                    match std::process::Command::new(program).args(args).spawn() {
+                    match events::launch_app(program, args) {
                         Ok(_) => {}
                         Err(e) => {
                             log::warn!("Failed to launch '{}': {}", command, e);

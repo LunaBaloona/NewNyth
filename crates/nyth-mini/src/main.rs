@@ -7,6 +7,31 @@ use roccat_nyth_hid::protocol::NYTH_PROFILE_NUM;
 use roccat_nyth_profile::NythDevice;
 use roccat_nyth_profile::config::ProfileNames;
 
+/// Tell the nythd daemon about a profile switch it cannot observe itself.
+/// Writing the active-profile byte on the device produces no hardware event,
+/// so without this nudge the daemon's record of the current profile goes
+/// stale and its later decisions (auto-switch, application buttons) use the
+/// wrong profile. Same pattern as nythctl's notifier: the result is advisory
+/// and failures are ignored (no daemon, or no session bus).
+fn notify_daemon_profile_changed(profile_number: u8) {
+    let Ok(conn) = zbus::blocking::connection::Builder::session()
+        .map(|b| b.method_timeout(std::time::Duration::from_millis(500)))
+        .and_then(|b| b.build())
+    else {
+        return;
+    };
+    let proxy: zbus::blocking::Proxy<'_> = match zbus::blocking::proxy::Builder::new(&conn)
+        .destination("org.roccat.Nyth")
+        .and_then(|b| b.path("/org/roccat/Nyth"))
+        .and_then(|b| b.interface("org.roccat.Nyth"))
+        .and_then(|b| b.build())
+    {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let _: Result<(), _> = proxy.call("ProfileChangedOutside", &(profile_number,));
+}
+
 fn main() -> Result<(), eframe::Error> {
     let args: Vec<String> = std::env::args().collect();
     for arg in args.iter().skip(1) {
@@ -90,6 +115,7 @@ impl MiniApp {
                     self.active_profile = index;
                     self.connected = true;
                     self.status = None;
+                    notify_daemon_profile_changed(index + 1);
                 }
                 Err(e) => {
                     self.status = Some(format!("Error: {e}"));

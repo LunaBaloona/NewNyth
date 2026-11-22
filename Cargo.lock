@@ -2185,6 +2185,7 @@ dependencies = [
  "log",
  "roccat-nyth-hid",
  "roccat-nyth-profile",
+ "zbus",
 ]
 
 [[package]]

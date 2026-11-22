@@ -13,6 +13,28 @@ fn zbus_client(timeout: std::time::Duration) -> Result<zbus::blocking::Connectio
         .and_then(|b| b.build())
 }
 
+/// Tell the nythd daemon about a profile switch it cannot observe itself.
+/// Writing the active-profile byte on the device produces no hardware event,
+/// so without this nudge the daemon's record of the current profile goes
+/// stale and its later decisions (auto-switch, application buttons) use the
+/// wrong profile. Same pattern as nythctl's notifier: the result is advisory
+/// and failures are ignored (no daemon, or no session bus).
+fn notify_daemon_profile_changed(profile_number: u8) {
+    let Ok(conn) = zbus_client(std::time::Duration::from_millis(500)) else {
+        return;
+    };
+    let proxy: zbus::blocking::Proxy<'_> = match zbus::blocking::proxy::Builder::new(&conn)
+        .destination("org.roccat.Nyth")
+        .and_then(|b| b.path("/org/roccat/Nyth"))
+        .and_then(|b| b.interface("org.roccat.Nyth"))
+        .and_then(|b| b.build())
+    {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let _: Result<(), _> = proxy.call("ProfileChangedOutside", &(profile_number,));
+}
+
 /// Cached state for a single profile.
 #[derive(Clone)]
 pub struct ProfileState {
@@ -102,7 +124,10 @@ impl DeviceState {
 
     pub fn apply_active_profile(&self, index: u8) -> Result<(), String> {
         let nyth = NythDevice::open_first().map_err(|e| e.to_string())?;
-        nyth.write_active_profile(index).map_err(|e| e.to_string())
+        nyth.write_active_profile(index)
+            .map_err(|e| e.to_string())?;
+        notify_daemon_profile_changed(index + 1);
+        Ok(())
     }
 
     /// Read just the active-profile byte. Polled at ~1 Hz so the profile

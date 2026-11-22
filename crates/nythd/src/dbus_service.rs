@@ -78,9 +78,8 @@ impl NythIface {
     #[zbus(name = "OpenGui")]
     async fn open_gui(&self) {
         log::info!("D-Bus: OpenGui requested");
-        let _ = std::process::Command::new("newnyth")
-            .spawn()
-            .or_else(|_| std::process::Command::new("nythctl").spawn());
+        let _ = crate::events::launch_app("newnyth", &[])
+            .or_else(|_| crate::events::launch_app("nythctl", &[]));
     }
 
     #[zbus(name = "WindowActivated")]
