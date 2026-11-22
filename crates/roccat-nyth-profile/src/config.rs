@@ -141,17 +141,30 @@ impl AutoSwitchConfig {
     }
 
     /// Find which profile (if any) matches a given app class.
-    /// Returns the profile index (0–4) or None.
+    /// Returns the profile index (0-4) or None. Profiles are scanned in
+    /// ascending order, so a class listed under two profiles (possible
+    /// only in a hand-edited config, the GUI refuses it) resolves to the
+    /// lowest profile number instead of to HashMap iteration order.
     pub fn profile_for_app(&self, app_class: &str) -> Option<u8> {
-        let app_lower = app_class.to_lowercase();
-        for (key, apps) in &self.profiles {
-            if apps.iter().any(|a| a.to_lowercase() == app_lower)
-                && let Ok(idx) = key.parse::<u8>()
-            {
-                return Some(idx);
-            }
-        }
-        None
+        self.app_owner(&app_class.to_lowercase(), None)
+    }
+
+    /// Lowest-numbered profile other than `except` whose app list contains
+    /// `app_class` (case-insensitive), or None. The GUI uses this to refuse
+    /// assigning an app that a different mouse profile already owns, and to
+    /// name that profile in the status message.
+    pub fn app_owner_other(&self, app_class: &str, except: u8) -> Option<u8> {
+        self.app_owner(&app_class.to_lowercase(), Some(except))
+    }
+
+    fn app_owner(&self, app_lower: &str, except: Option<u8>) -> Option<u8> {
+        (0..roccat_nyth_hid::protocol::NYTH_PROFILE_NUM).find(|&idx| {
+            Some(idx) != except
+                && self
+                    .profiles
+                    .get(&idx.to_string())
+                    .is_some_and(|apps| apps.iter().any(|a| a.to_lowercase() == app_lower))
+        })
     }
 }
 
@@ -229,6 +242,33 @@ mod tests {
         assert_eq!(cfg.profile_for_app("brave-browser"), Some(1));
         assert_eq!(cfg.profile_for_app("Brave-Browser"), Some(1));
         assert_eq!(cfg.profile_for_app("firefox"), None);
+    }
+
+    #[test]
+    fn profile_for_app_prefers_lowest_profile_on_duplicates() {
+        // A duplicate class can only reach the config by hand-editing
+        // (the GUI refuses it); resolution must not depend on HashMap
+        // iteration order, so the lowest profile number wins. Insert in
+        // both orders to pin this down.
+        for (first, second) in [(4u8, 2u8), (2, 4)] {
+            let mut cfg = AutoSwitchConfig::default();
+            cfg.apps_for_profile_mut(first)
+                .push("org.kde.kwrite".into());
+            cfg.apps_for_profile_mut(second)
+                .push("Org.KDE.KWrite".into());
+            assert_eq!(cfg.profile_for_app("org.kde.kwrite"), Some(2));
+        }
+    }
+
+    #[test]
+    fn app_owner_other_names_the_conflicting_profile() {
+        let mut cfg = AutoSwitchConfig::default();
+        cfg.apps_for_profile_mut(2).push("org.kde.kwrite".into());
+        cfg.apps_for_profile_mut(4).push("org.kde.kwrite".into());
+        assert_eq!(cfg.app_owner_other("org.kde.kwrite", 4), Some(2));
+        assert_eq!(cfg.app_owner_other("org.kde.kwrite", 2), Some(4));
+        assert_eq!(cfg.app_owner_other("ORG.KDE.KWRITE", 0), Some(2));
+        assert_eq!(cfg.app_owner_other("firefox", 0), None);
     }
 
     #[test]
