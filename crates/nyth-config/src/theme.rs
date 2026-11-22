@@ -267,9 +267,14 @@ fn card_inner<R>(
                 0.0
             };
             let actions_w = if header_actions.is_some() { 150.0 } else { 0.0 };
+            // Trim both ends of the title band by the same (worst-case)
+            // width. The pencil band and the "Default" band are different
+            // widths, and an asymmetric band slid the centred title off
+            // the card's centre line by a different amount in each card.
+            let side = left_w.max(actions_w);
             let title_rect = egui::Rect::from_min_max(
-                egui::pos2(strip.left() + left_w, strip.top()),
-                egui::pos2(strip.right() - actions_w, strip.bottom()),
+                egui::pos2(strip.left() + side, strip.top()),
+                egui::pos2(strip.right() - side, strip.bottom()),
             );
             if let Some(left) = header_left.as_mut() {
                 let left_rect = egui::Rect::from_min_max(
@@ -288,9 +293,10 @@ fn card_inner<R>(
                 egui::UiBuilder::new()
                     .id_salt(("card_header", id))
                     .max_rect(title_rect)
-                    .layout(egui::Layout::centered_and_justified(
-                        egui::Direction::LeftToRight,
-                    )),
+                    // A centring vertical layout parks each widget (the
+                    // title label, or the inline rename row) on the band's
+                    // centre line at its natural width.
+                    .layout(egui::Layout::top_down(egui::Align::Center)),
             );
             match header.as_mut() {
                 Some(draw_header) => draw_header(&mut title_ui),
@@ -368,6 +374,21 @@ pub fn centered_row_sized<R>(
 ///
 /// Returns `(first_clicked, second_clicked)`.
 pub fn centered_pair(ui: &mut egui::Ui, first: &str, second: &str) -> (bool, bool) {
+    centered_pair_enabled(ui, true, first, true, second)
+}
+
+/// Same half-strip centring as [`centered_pair`], but either button can
+/// be greyed until there is something to do - used by the Apply/Save and
+/// Revert bars pinned to the foot of every tab.
+///
+/// Returns `(first_clicked, second_clicked)`.
+pub fn centered_pair_enabled(
+    ui: &mut egui::Ui,
+    first_enabled: bool,
+    first: &str,
+    second_enabled: bool,
+    second: &str,
+) -> (bool, bool) {
     let gap = ui.spacing().item_spacing.x;
     let height = ui.spacing().interact_size.y;
     let strip =
@@ -383,7 +404,8 @@ pub fn centered_pair(ui: &mut egui::Ui, first: &str, second: &str) -> (bool, boo
                 ))
                 .layout(egui::Layout::right_to_left(egui::Align::Center)),
         );
-        left.button(first).clicked()
+        left.add_enabled(first_enabled, egui::Button::new(first))
+            .clicked()
     };
     let second_clicked = {
         let mut right = ui.new_child(
@@ -395,8 +417,62 @@ pub fn centered_pair(ui: &mut egui::Ui, first: &str, second: &str) -> (bool, boo
                 ))
                 .layout(egui::Layout::left_to_right(egui::Align::Center)),
         );
-        right.button(second).clicked()
+        right
+            .add_enabled(second_enabled, egui::Button::new(second))
+            .clicked()
     };
     ui.allocate_space(strip.size());
     (first_clicked, second_clicked)
+}
+
+/// A horizontal row centred on its parent's centre line at its natural
+/// width, whatever that turns out to be.
+///
+/// [`egui::Ui::horizontal`] always fills its parent, so inside a
+/// centring layout ([`egui::Ui::vertical_centered`], a card body) its
+/// content packs against the left edge; [`centered_row_sized`] can
+/// centre, but must be handed a strip width that fits the content - a
+/// strip that is narrower or wider shifts the group off the centre line.
+/// This measures the row instead: the closure runs once in a throwaway
+/// child parked far outside the clip rect (no pointer can reach it, so
+/// nothing is hovered, clicked or focused and `clicked()`/`changed()`
+/// stay false there), then runs again for real inside a strip exactly as
+/// wide as the measurement, which the centring parent parks on the
+/// centre line at any font scale.
+///
+/// The closure must therefore be a plain row of widgets that only
+/// mutate through user interaction; it runs twice per frame.
+pub fn centered_row_fit<R>(
+    ui: &mut egui::Ui,
+    add_contents: impl FnMut(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    let height = ui.spacing().interact_size.y;
+    centered_row_fit_sized(ui, height, add_contents)
+}
+
+/// Like [`centered_row_fit`], with an explicit height - needed for rows
+/// containing taller widgets (e.g. segmented sliders with tick labels).
+pub fn centered_row_fit_sized<R>(
+    ui: &mut egui::Ui,
+    height: f32,
+    mut add_contents: impl FnMut(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    // Measuring pass: the same widgets far off-screen, where the parent
+    // clip rect hides them and no pointer can land. The y coordinate
+    // keeps the child ids of sibling rows distinct from each other.
+    let probe = egui::Rect::from_min_size(
+        egui::pos2(ui.max_rect().max.x + 1.0e6, ui.cursor().min.y.round()),
+        ui.available_size(),
+    );
+    let width = {
+        let mut meas = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(("centered_row_fit", probe.min.y as i32))
+                .max_rect(probe)
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        add_contents(&mut meas);
+        meas.min_size().x
+    };
+    centered_row_sized(ui, width, height, add_contents)
 }

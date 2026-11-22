@@ -44,7 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GUI polish: the Tracking and Distance Control Unit radio rows centre
   within their cards, and the small grey helper texts on the Advanced
   tab (polling rate, TCU and DCU descriptions plus the mouse-wide
-  settings note) use the normal font size while staying grey.
+  settings note) use the normal font size while staying grey. The
+  centring was then finished properly: the Apply/Save and Revert
+  buttons hug the centre line at any font scale, and horizontal rows
+  (DPI levels, sensitivity, advanced sensitivity, lighting colours and
+  effects, TCU and DCU radios) are measured and parked on the card's
+  centre line instead of packing against a fixed-width strip's left
+  edge. The "+ Add application" buttons and the Mouse Profile card
+  header titles centre on their cards the same way.
 
 ### Removed
 
