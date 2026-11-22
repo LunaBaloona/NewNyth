@@ -148,18 +148,41 @@ pub const CARD_BODY_MARGIN: f32 = 8.0;
 
 /// Alternating-row band spanning the full card width, flush with the
 /// card edges (egui's own `Grid::striped` only paints behind the grid's
-/// columns, so the band stops short of the frame). Call on the card
-/// body ui *before* adding the row's widgets so the content paints on
-/// top; `top` is the row's current cursor y. Same colour egui's striped
-/// rows use (`faint_bg_color`), keeping hand-banded rows consistent.
-pub fn card_row_band(ui: &egui::Ui, top: f32, height: f32) {
-    let inner = ui.available_rect_before_wrap();
-    let rect = egui::Rect::from_min_max(
-        egui::pos2(inner.left() - CARD_BODY_MARGIN, top),
-        egui::pos2(inner.right() + CARD_BODY_MARGIN, top + height),
-    );
-    ui.painter()
-        .rect_filled(rect, 0.0, ui.visuals().faint_bg_color);
+/// columns, so the band stops short of the frame). Capture once per
+/// card from the card body ui, then `paint` each banded row *before*
+/// adding the row's widgets so the content paints on top; the extent
+/// and painter must be captured outside layouts like `egui::Grid`,
+/// whose per-row available rect is only as wide as the current column.
+/// Same colour egui's striped rows use (`faint_bg_color`), keeping
+/// hand-banded rows consistent.
+pub struct CardRowBand {
+    left: f32,
+    right: f32,
+    painter: egui::Painter,
+    fill: egui::Color32,
+}
+
+impl CardRowBand {
+    /// Capture from a [`card`] body ui (its full content width plus the
+    /// body margin, reaching the card edges).
+    pub fn for_card(ui: &egui::Ui) -> Self {
+        let inner = ui.available_rect_before_wrap();
+        Self {
+            left: inner.left() - CARD_BODY_MARGIN,
+            right: inner.right() + CARD_BODY_MARGIN,
+            painter: ui.painter().clone(),
+            fill: ui.visuals().faint_bg_color,
+        }
+    }
+
+    /// Paint one band from `top` (the row's cursor y) down `height`.
+    pub fn paint(&self, top: f32, height: f32) {
+        let rect = egui::Rect::from_min_max(
+            egui::pos2(self.left, top),
+            egui::pos2(self.right, top + height),
+        );
+        self.painter.rect_filled(rect, 0.0, self.fill);
+    }
 }
 
 /// Full-width ACCENT-blue horizontal rule (keypad row separation in the
