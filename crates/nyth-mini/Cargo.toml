@@ -18,3 +18,4 @@ egui.workspace = true # feature activation only; code uses eframe::egui
 image = { version = "0.25", default-features = false, features = ["png"] }
 log.workspace = true
 env_logger.workspace = true
+zbus.workspace = true
