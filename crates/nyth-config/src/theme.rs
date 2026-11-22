@@ -142,6 +142,26 @@ pub fn card<R>(
     card_inner(ui, title, title, None, None, None, add_body)
 }
 
+/// Body inset of [`card`] (the body [`egui::Frame`]'s inner margin).
+/// Row bands extend by this much on both sides to reach the card edges.
+pub const CARD_BODY_MARGIN: f32 = 8.0;
+
+/// Alternating-row band spanning the full card width, flush with the
+/// card edges (egui's own `Grid::striped` only paints behind the grid's
+/// columns, so the band stops short of the frame). Call on the card
+/// body ui *before* adding the row's widgets so the content paints on
+/// top; `top` is the row's current cursor y. Same colour egui's striped
+/// rows use (`faint_bg_color`), keeping hand-banded rows consistent.
+pub fn card_row_band(ui: &egui::Ui, top: f32, height: f32) {
+    let inner = ui.available_rect_before_wrap();
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(inner.left() - CARD_BODY_MARGIN, top),
+        egui::pos2(inner.right() + CARD_BODY_MARGIN, top + height),
+    );
+    ui.painter()
+        .rect_filled(rect, 0.0, ui.visuals().faint_bg_color);
+}
+
 /// Full-width ACCENT-blue horizontal rule (keypad row separation in the
 /// side-button grids).
 pub fn accent_rule(ui: &mut egui::Ui) {
@@ -263,7 +283,7 @@ fn card_inner<R>(
 
             // ── Body ──
             egui::Frame::new()
-                .inner_margin(8.0)
+                .inner_margin(CARD_BODY_MARGIN)
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     add_body(ui)
