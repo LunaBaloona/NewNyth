@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Repository metadata is GPG-signed; the signing key setup and rotation
   procedure live in `docs/RELEASING.md`.
 
+### Changed
+
+- The D-Bus transport in the daemon, GUI, and `nythctl` now uses the
+  pure-Rust `zbus` crate instead of the C-based `dbus` bindings. Nothing
+  links libdbus anymore, the daemon's 100 ms D-Bus pump is gone, and
+  external profile changes and config nudges travel over the same
+  connection as before.
+- `nythd` now caps `zbus`'s and `tracing`'s log output at warn level
+  unless `RUST_LOG` is set, so the systemd journal no longer fills with
+  one full D-Bus message dump per window activation. Set `RUST_LOG`
+  (e.g. `zbus=trace`) to capture library internals while debugging.
+
+### Removed
+
+- The `libdbus-1-dev` build dependency and the `libdbus-1-3` /
+  `dbus-libs` runtime package requirements, for .deb and .rpm alike.
+
 ## [0.9.4] - 2026-11-07
 
 ### Added
