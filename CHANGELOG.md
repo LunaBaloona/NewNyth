@@ -59,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   centred above the custom name, spanning the full width between the
   pencil button and the Default checkbox, each line ellipsised only
   if even it cannot fit.
+- The in-development version moved from 0.9.4 to 0.9.5 (window footer
+  and `--version` report it). This is a development marker only: the
+  next published release remains 1.0.0.
 
 ### Removed
 
