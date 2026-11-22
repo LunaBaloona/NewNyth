@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `libdbus-1-dev` build dependency and the `libdbus-1-3` /
   `dbus-libs` runtime package requirements, for .deb and .rpm alike.
 
+### Fixed
+
+- An application can now only be auto-switch-assigned to one mouse
+  profile. Capturing a window whose class is already assigned elsewhere
+  is refused with a status message naming the owning profile, instead of
+  silently creating a duplicate whose winning profile was arbitrary.
+  Duplicates left in hand-edited configs now resolve deterministically
+  to the lowest-numbered profile that lists the app.
+
 ## [0.9.4] - 2026-11-07
 
 ### Added

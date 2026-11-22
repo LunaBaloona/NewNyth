@@ -475,6 +475,13 @@ impl eframe::App for NythConfigApp {
         if self.capturing_for.is_some() {
             if let Some(app_class) = DeviceState::poll_captured_app() {
                 let (profile_idx, slot_idx) = self.capturing_for.take().unwrap();
+                // One app class may belong to only one mouse profile, so
+                // check the other profiles before touching this one and
+                // name the owner if there is a conflict.
+                let owner = self
+                    .state
+                    .autoswitch
+                    .app_owner_other(&app_class, profile_idx);
                 let apps = self.state.autoswitch.apps_for_profile_mut(profile_idx);
 
                 // Check for duplicate.
@@ -482,7 +489,16 @@ impl eframe::App for NythConfigApp {
                     .iter()
                     .any(|a| a.to_lowercase() == app_class.to_lowercase());
 
-                if already_exists {
+                if let Some(owner) = owner {
+                    self.set_status(
+                        format!(
+                            "'{}' is already assigned to MP {} - remove it there first",
+                            app_class,
+                            owner + 1
+                        ),
+                        &ctx,
+                    );
+                } else if already_exists {
                     self.set_status(format!("'{}' is already assigned", app_class), &ctx);
                 } else if slot_idx < apps.len() {
                     // Replace existing slot.
