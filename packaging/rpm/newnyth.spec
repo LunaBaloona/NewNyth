@@ -20,7 +20,7 @@ BuildArch:      x86_64
 
 # dlopen()'ed at runtime (the binaries carry no NEEDED entries for them),
 # so they must be declared explicitly:
-Requires:       glibc >= 2.39, dbus-libs, fontconfig, libX11, libXi, libXcursor
+Requires:       glibc >= 2.39, fontconfig, libX11, libXi, libXcursor
 Requires:       libxkbcommon >= 1.6.0, libxkbcommon-x11
 Requires:       libwayland-client, libwayland-egl, libEGL.so.1()(64bit), libglvnd-glx
 Recommends:     playerctl, pulseaudio-utils, libdrm, mesa-filesystem

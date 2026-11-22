@@ -69,8 +69,19 @@ fn main() {
     } else {
         "warn"
     };
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_filter))
-        .init();
+    let mut log_builder =
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_filter));
+    // zbus logs an INFO-level dump of every D-Bus message it dispatches
+    // (KWin calls us on each window activation), and its span bridge adds
+    // `tracing::span` chatter; at the foreground info default those dumps
+    // drown the journal. Cap both libraries at warn, but only when RUST_LOG
+    // is unset: env_logger replaces same-target directives set earlier, so
+    // an explicit RUST_LOG (e.g. `zbus=trace`) must stay fully in control.
+    if std::env::var_os("RUST_LOG").is_none() {
+        log_builder.filter_module("zbus", log::LevelFilter::Warn);
+        log_builder.filter_module("tracing", log::LevelFilter::Warn);
+    }
+    log_builder.init();
 
     log::info!(
         "NewNyth daemon (nythd) {} starting",
