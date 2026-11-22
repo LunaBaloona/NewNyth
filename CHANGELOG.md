@@ -27,6 +27,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unless `RUST_LOG` is set, so the systemd journal no longer fills with
   one full D-Bus message dump per window activation. Set `RUST_LOG`
   (e.g. `zbus=trace`) to capture library internals while debugging.
+- GUI polish: alternating row bands in the Button Assignment grids now
+  span the full card width instead of stopping at the row content, the
+  Auto-Switch profile cards use the same card-width bands behind their
+  application rows, and the Advanced tab arranges its four cards in a
+  two-column grid when the window is wide enough (still stacked when
+  narrow).
+- GUI polish: the Apply/Save and Revert buttons now sit centred in
+  their own row inside a pinned bottom strip on every section (the
+  Buttons tab already had such a dedicated bottom section; Settings,
+  Advanced and Lighting now share one, and the Auto-Switch save bar
+  moved there from the top of its tab). Each Auto-Switch Mouse Profile
+  card gained a second header: the "+ Add application" button centred
+  directly below the profile title, closed off by a card-wide rule, so
+  captured slots appear right underneath it. The placeholder note
+  below the Button Assignment grids ("Click a button name above to
+  configure it.") is gone; the panel stays blank until a button is
+  picked.
+- GUI polish: the Tracking and Distance Control Unit radio rows centre
+  within their cards, and the small grey helper texts on the Advanced
+  tab (polling rate, TCU and DCU descriptions plus the mouse-wide
+  settings note) use the normal font size while staying grey. The
+  centring was then finished properly: the Apply/Save and Revert
+  buttons hug the centre line at any font scale, and horizontal rows
+  (DPI levels, sensitivity, advanced sensitivity, lighting colours and
+  effects, TCU and DCU radios) are measured and parked on the card's
+  centre line instead of packing against a fixed-width strip's left
+  edge. The "+ Add application" buttons and the Mouse Profile card
+  header titles centre on their cards the same way. The Mouse Profile
+  headers are now two lines tall: the fixed "Mouse Profile N" caption
+  centred above the custom name, spanning the full width between the
+  pencil button and the Default checkbox, each line ellipsised only
+  if even it cannot fit.
+- The in-development version moved from 0.9.4 to 0.9.5 (window footer
+  and `--version` report it). This is a development marker only: the
+  next published release remains 1.0.0.
 
 ### Removed
 
