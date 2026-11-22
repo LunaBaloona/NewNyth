@@ -1900,7 +1900,9 @@ impl NythConfigApp {
         } else {
             self.buttons_dirty
         };
-        ui.horizontal(|ui| {
+        // Centred in its own row, the same placement every section's
+        // apply/save + revert bar uses.
+        ui.horizontal_centered(|ui| {
             let label = if is_settings {
                 "Apply settings"
             } else {
@@ -1949,15 +1951,11 @@ impl NythConfigApp {
 
         ui.add_space(8.0);
 
-        // The save bar must be added *before* the profile scroll area below:
-        // a vertical ScrollArea expands to fill all remaining window height,
-        // so anything added after it falls outside the window and can never
-        // be seen or clicked (the bug that made captured apps unsaveable).
-        self.ui_autoswitch_save_bar(ui, ctx);
-
         if !self.state.autoswitch.enabled {
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Auto-switching is disabled.").weak());
+            ui.add_space(8.0);
+            self.ui_autoswitch_save_bar(ui, ctx);
             return;
         }
 
@@ -1993,8 +1991,18 @@ impl NythConfigApp {
         let num_cols = (((avail_w + gap) / (min_card_w + gap)).floor() as usize)
             .clamp(1, NYTH_PROFILE_NUM as usize);
 
+        // The save bar keeps its own centred row at the bottom of the tab,
+        // like every other section's Apply/Revert bar. A plain vertical
+        // ScrollArea claims all remaining window height, so anything added
+        // after it falls outside the window and can never be seen or
+        // clicked (the bug that once made captured apps unsaveable): pin
+        // the scroll to the height the bar leaves over and add it below.
+        let bar_h = ui.spacing().interact_size.y + ui.spacing().item_spacing.y + 8.0;
+        let scroll_h = (ui.available_height() - bar_h).max(140.0);
         egui::ScrollArea::vertical()
             .id_salt("autoswitch_main_scroll")
+            .auto_shrink([false, false])
+            .max_height(scroll_h)
             .show(ui, |ui| {
                 // Row-major flow: 1 2 3 across the top, 4 5 (… 6) below.
                 // Each card stretches to fill an equal-width cell of its row.
@@ -2137,6 +2145,42 @@ impl NythConfigApp {
                                         .to_vec();
                                     let mut to_remove: Option<usize> = None;
 
+                                    // The add button sits centred at the
+                                    // top of the card body, right below the
+                                    // header strip; the slot it captures
+                                    // then appears directly underneath it.
+                                    // One compact row instead of a wall of
+                                    // empty capture slots.
+                                    if apps.len() < max_apps {
+                                        ui.horizontal_centered(|ui| {
+                                            if cap_here {
+                                                ui.label(
+                                                    egui::RichText::new(
+                                                        "Waiting for you to click a window…",
+                                                    )
+                                                    .weak()
+                                                    .italics(),
+                                                );
+                                            } else if ui.button("＋ Add application").clicked() {
+                                                let slot = self
+                                                    .state
+                                                    .autoswitch
+                                                    .apps_for_profile(profile_idx)
+                                                    .len();
+                                                self.capturing_for = Some((profile_idx, slot));
+                                                DeviceState::start_capture();
+                                                self.set_status(
+                                                    format!(
+                                                        "Click a window to add it to Mouse Profile {}…",
+                                                        profile_idx + 1
+                                                    ),
+                                                    ctx,
+                                                );
+                                            }
+                                        });
+                                        ui.add_space(4.0);
+                                    }
+
                                     let row_h = ui.spacing().interact_size.y;
                                     let band = crate::theme::CardRowBand::for_card(ui);
                                     for (slot, app) in apps.iter().enumerate() {
@@ -2193,35 +2237,6 @@ impl NythConfigApp {
                                             .remove(slot);
                                         self.autoswitch_dirty = true;
                                     }
-
-                                    // One compact add row instead of a wall
-                                    // of empty capture slots.
-                                    if apps.len() < max_apps {
-                                        if cap_here {
-                                            ui.label(
-                                                egui::RichText::new(
-                                                    "Waiting for you to click a window…",
-                                                )
-                                                .weak()
-                                                .italics(),
-                                            );
-                                        } else if ui.button("＋ Add application").clicked() {
-                                            let slot = self
-                                                .state
-                                                .autoswitch
-                                                .apps_for_profile(profile_idx)
-                                                .len();
-                                            self.capturing_for = Some((profile_idx, slot));
-                                            DeviceState::start_capture();
-                                            self.set_status(
-                                                format!(
-                                                    "Click a window to add it to Mouse Profile {}…",
-                                                    profile_idx + 1
-                                                ),
-                                                ctx,
-                                            );
-                                        }
-                                    }
                                 },
                                 );
                             });
@@ -2264,10 +2279,14 @@ impl NythConfigApp {
                     ui.add_space(8.0);
                 }
             });
+
+        ui.add_space(4.0);
+        self.ui_autoswitch_save_bar(ui, ctx);
     }
 
     fn ui_autoswitch_save_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        ui.horizontal(|ui| {
+        // Centred in its own row, like the other tabs' Apply/Revert bars.
+        ui.horizontal_centered(|ui| {
             if ui
                 .add_enabled(
                     self.autoswitch_dirty,

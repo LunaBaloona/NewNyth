@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   application rows, and the Advanced tab arranges its four cards in a
   two-column grid when the window is wide enough (still stacked when
   narrow).
+- GUI polish: the Apply/Save and Revert buttons now sit centred in
+  their own row at the bottom of every section (the Auto-Switch save
+  bar moved from above the profile cards down to the bottom of the
+  tab), and the "+ Add application" button sits centred at the top of
+  each Mouse Profile card, directly below its header, so the new slot
+  appears right underneath it.
 
 ### Removed
 
