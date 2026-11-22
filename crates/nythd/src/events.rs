@@ -316,8 +316,45 @@ pub fn simulate_media_key(action: u8) {
 }
 
 fn run_media_cmd(program: &str, args: &[&str]) {
-    match std::process::Command::new(program).args(args).spawn() {
-        Ok(_) => {}
+    // P3-3: the old fire-and-forget spawn turned failing children into silent
+    // no-ops (e.g. playerctl exits 1 with "No player could be found" when no
+    // MPRIS player is registered, which looked like the media buttons dying
+    // at random). Pipe the output and reap the child on a helper thread so
+    // the HID event loop never blocks, logging anything the child reports.
+    let spawned = std::process::Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn();
+    match spawned {
+        Ok(child) => {
+            let program = program.to_owned();
+            std::thread::spawn(move || match child.wait_with_output() {
+                Ok(out) if out.status.success() => {
+                    log::debug!("Media cmd '{}' ok", program);
+                }
+                Ok(out) => {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let first_line = stderr
+                        .trim()
+                        .lines()
+                        .next()
+                        .filter(|line| !line.is_empty())
+                        .unwrap_or("(no stderr output)");
+                    let first_line: String = first_line.chars().take(200).collect();
+                    log::warn!(
+                        "Media cmd '{}' failed with {}: {}",
+                        program,
+                        out.status,
+                        first_line
+                    );
+                }
+                Err(e) => {
+                    log::warn!("Media cmd '{}': could not wait for child: {}", program, e);
+                }
+            });
+        }
         Err(e) => {
             log::warn!("Failed to run '{}': {} - is it installed?", program, e);
         }
