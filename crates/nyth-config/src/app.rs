@@ -101,6 +101,11 @@ pub struct NythConfigApp {
     tcu_wizard: Option<TcuWizard>,
     /// Open DCU keep-or-revert dialog (Advanced tab).
     dcu_keep: Option<DcuKeep>,
+    /// Profile clicked in the bar while edits are pending: held here
+    /// until the user answers Save / Discard / Cancel.
+    switch_prompt: Option<u8>,
+    /// Set when a window close was intercepted because edits are pending.
+    close_prompt: bool,
     /// Auto-switch card whose header name field is open (pencil button).
     name_editing: Option<u8>,
     /// Ask the header name field for keyboard focus once it appears.
@@ -147,6 +152,8 @@ impl NythConfigApp {
             capturing_for: None,
             tcu_wizard: None,
             dcu_keep: None,
+            switch_prompt: None,
+            close_prompt: false,
             name_editing: None,
             name_edit_focus: false,
             last_profile_poll: std::time::Instant::now(),
@@ -243,28 +250,38 @@ impl NythConfigApp {
         self.opener_edit_buf.clear();
     }
 
-    fn apply_settings(&mut self, ctx: &egui::Context) {
-        if let Some(ref mut settings) = self.pending_settings {
-            match self
-                .state
-                .apply_profile_settings(self.selected_profile, settings)
-            {
-                Ok(()) => {
-                    self.settings_dirty = false;
-                    if let Some(ref mut p) = self.state.profiles[self.selected_profile as usize] {
-                        p.settings = *settings;
-                    }
-                    self.set_status(
-                        format!("Profile {} settings saved", self.selected_profile + 1),
-                        ctx,
-                    );
+    /// Write pending settings to the device. Returns false on failure
+    /// (status bar shows why) so the unsaved-edit guard can keep its
+    /// dialog open instead of silently losing the edit.
+    fn apply_settings(&mut self, ctx: &egui::Context) -> bool {
+        let Some(ref mut settings) = self.pending_settings else {
+            return true;
+        };
+        match self
+            .state
+            .apply_profile_settings(self.selected_profile, settings)
+        {
+            Ok(()) => {
+                self.settings_dirty = false;
+                if let Some(ref mut p) = self.state.profiles[self.selected_profile as usize] {
+                    p.settings = *settings;
                 }
-                Err(e) => self.set_status(format!("Error: {}", e), ctx),
+                self.set_status(
+                    format!("Profile {} settings saved", self.selected_profile + 1),
+                    ctx,
+                );
+                true
+            }
+            Err(e) => {
+                self.set_status(format!("Error: {}", e), ctx);
+                false
             }
         }
     }
 
-    fn apply_buttons(&mut self, ctx: &egui::Context) {
+    /// Write pending button mappings (and the openers file) to the
+    /// device. False on failure; see `apply_settings`.
+    fn apply_buttons(&mut self, ctx: &egui::Context) -> bool {
         if let Some(ref mut buttons) = self.pending_buttons {
             match self
                 .state
@@ -283,10 +300,47 @@ impl NythConfigApp {
                         format!("Profile {} buttons saved", self.selected_profile + 1),
                         ctx,
                     );
+                    true
                 }
-                Err(e) => self.set_status(format!("Error: {}", e), ctx),
+                Err(e) => {
+                    self.set_status(format!("Error: {}", e), ctx);
+                    false
+                }
+            }
+        } else {
+            true
+        }
+    }
+
+    /// True while any panel holds edits that have not been saved.
+    fn has_unsaved(&self) -> bool {
+        self.settings_dirty || self.buttons_dirty || self.autoswitch_dirty
+    }
+
+    /// Flush every pending edit: the viewed profile's settings and
+    /// buttons to the device, plus the auto-switch config file (with
+    /// the usual daemon nudge). Returns false if anything failed, so
+    /// callers keep their guard dialog open rather than lose work.
+    fn save_all_pending(&mut self, ctx: &egui::Context) -> bool {
+        let mut ok = self.apply_settings(ctx);
+        ok = self.apply_buttons(ctx) && ok;
+        if self.autoswitch_dirty {
+            match self.state.save_autoswitch() {
+                Ok(()) => {
+                    self.autoswitch_dirty = false;
+                    // Same contract as the auto-switch save bar: a failed
+                    // nudge only delays pickup via the daemon's mtime poll.
+                    if let Err(e) = DeviceState::notify_daemon_config_changed() {
+                        log::warn!("Saved, but could not notify daemon: {}", e);
+                    }
+                }
+                Err(e) => {
+                    self.set_status(format!("Error: {}", e), ctx);
+                    ok = false;
+                }
             }
         }
+        ok
     }
 
     fn activate_profile_on_device(&mut self, index: u8, ctx: &egui::Context) {
@@ -339,6 +393,14 @@ impl eframe::App for NythConfigApp {
         // Panels below need `ui` mutably, so grab a cheap context handle up
         // front (Context is an Arc internally; cloning is cheap).
         let ctx = ui.ctx().clone();
+
+        // Unsaved-edit guard for the window close button: eframe would quit
+        // without asking, so cancel the close while edits are pending and
+        // let `ui_close_confirm` decide what happens next.
+        if ctx.input(|i| i.viewport().close_requested()) && self.has_unsaved() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.close_prompt = true;
+        }
 
         // Follow external profile changes (daemon auto-switch): refresh the
         // sidebar indicator at 1 Hz. The read is throttled internally, the
@@ -420,8 +482,16 @@ impl eframe::App for NythConfigApp {
                             None => format!("Profile {}", i + 1),
                         };
                         let r = ui.add_sized([30.0, 26.0], btn).on_hover_text(tip);
-                        if r.clicked() {
-                            self.selected_profile = i;
+                        if r.clicked() && i != self.selected_profile {
+                            if self.settings_dirty || self.buttons_dirty {
+                                // Switching reloads the editor and would
+                                // drop pending edits: ask first. Auto-switch
+                                // edits are global and survive a switch, so
+                                // they do not trigger this prompt.
+                                self.switch_prompt = Some(i);
+                            } else {
+                                self.selected_profile = i;
+                            }
                         }
                         if i == self.state.active_profile {
                             ui.painter().line_segment(
@@ -575,11 +645,13 @@ impl eframe::App for NythConfigApp {
             }
         });
 
-        // Modal helper windows on top of the panels (calibration
-        // wizard; more may follow). They pump their own timers and
-        // early-return when closed.
+        // Modal helper windows on top of the panels (calibration wizard,
+        // unsaved-edit guards). They pump their own timers and early-return
+        // when closed.
         self.ui_tcu_wizard(&ctx);
         self.ui_dcu_keep(&ctx);
+        self.ui_switch_confirm(&ctx);
+        self.ui_close_confirm(&ctx);
     }
 }
 
@@ -1264,6 +1336,119 @@ impl NythConfigApp {
             }
             WizardAction::Close => self.tcu_wizard = None,
             WizardAction::Abandon => self.tcu_abandon(ctx),
+        }
+    }
+
+    // ─── Unsaved-edit guard dialogs ───────────────────────────────────
+
+    /// Guard dialog for the profile bar: switching profiles reloads the
+    /// editor from the cached profile data and would silently drop unsaved
+    /// settings or button edits.
+    fn ui_switch_confirm(&mut self, ctx: &egui::Context) {
+        let Some(target) = self.switch_prompt else {
+            return;
+        };
+        let mut save_and_switch = false;
+        let mut discard_and_switch = false;
+        let mut cancelled = false;
+        let mut open = true;
+        egui::Window::new("Switch profiles?")
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(360.0)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Profile {} has unsaved changes.",
+                            self.selected_profile + 1
+                        ))
+                        .strong(),
+                    );
+                    ui.label(format!(
+                        "Switching to profile {} would discard them.",
+                        target + 1
+                    ));
+                    ui.add_space(12.0);
+                    let (save, discard) =
+                        crate::theme::centered_pair(ui, "Save & switch", "Discard & switch");
+                    if save {
+                        save_and_switch = true;
+                    }
+                    if discard {
+                        discard_and_switch = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancelled = true;
+                    }
+                });
+            });
+        if !open || cancelled {
+            self.switch_prompt = None;
+            return;
+        }
+        if save_and_switch {
+            // On a failed device write stay on the current profile with the
+            // dialog open; the status bar shows the error. Nothing is lost.
+            if self.save_all_pending(ctx) {
+                self.selected_profile = target;
+                self.load_pending_from_profile();
+                self.switch_prompt = None;
+            }
+        } else if discard_and_switch {
+            self.selected_profile = target;
+            self.load_pending_from_profile();
+            self.switch_prompt = None;
+        }
+    }
+
+    /// Guard dialog for a window close intercepted in `ui`: saving quits
+    /// only after every pending edit reaches the device or a config file,
+    /// discarding quits at once, and closing the dialog keeps editing.
+    fn ui_close_confirm(&mut self, ctx: &egui::Context) {
+        if !self.close_prompt {
+            return;
+        }
+        let mut save_and_quit = false;
+        let mut discard_and_quit = false;
+        let mut keep_editing = false;
+        let mut open = true;
+        egui::Window::new("Unsaved changes")
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(360.0)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(egui::RichText::new("You have unsaved changes.").strong());
+                    ui.label("Quitting now would discard them.");
+                    ui.add_space(12.0);
+                    let (save, discard) =
+                        crate::theme::centered_pair(ui, "Save & quit", "Discard & quit");
+                    if save {
+                        save_and_quit = true;
+                    }
+                    if discard {
+                        discard_and_quit = true;
+                    }
+                    if ui.button("Keep editing").clicked() {
+                        keep_editing = true;
+                    }
+                });
+            });
+        if save_and_quit {
+            if self.save_all_pending(ctx) {
+                self.close_prompt = false;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        } else if discard_and_quit {
+            self.close_prompt = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        } else if keep_editing || !open {
+            self.close_prompt = false;
         }
     }
 
@@ -2364,10 +2549,47 @@ impl NythConfigApp {
 }
 
 /// Truncate a string for display, adding "…" if too long.
+/// Counts characters, not bytes: slicing multi-byte text (Cyrillic or CJK
+/// paths, emoji) at an arbitrary byte index panics the whole GUI.
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}…", &s[..max_len])
+        let mut out: String = s.chars().take(max_len).collect();
+        out.push('…');
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate;
+
+    #[test]
+    fn truncate_leaves_short_strings_alone() {
+        assert_eq!(truncate("kwrite", 20), "kwrite");
+        assert_eq!(truncate("12345678901234567890", 20), "12345678901234567890");
+        // 4 CJK characters are 12 bytes but must not be truncated at 4.
+        let cjk = "\u{4e00}\u{4e8c}\u{4e09}\u{56db}";
+        assert_eq!(truncate(cjk, 4), cjk);
+    }
+
+    #[test]
+    fn truncate_cuts_long_ascii() {
+        assert_eq!(
+            truncate(&"x".repeat(30), 20),
+            format!("{}…", "x".repeat(20))
+        );
+    }
+
+    #[test]
+    fn truncate_multibyte_does_not_panic() {
+        // Review finding 1.3: byte-slicing at the limit panicked the whole
+        // GUI on this kind of path, and the panic returned on every start
+        // because the command was persisted in openers.json.
+        let s = "~/Документы/kwrite.desktop --max";
+        let out = truncate(s, 20);
+        assert!(out.ends_with('…'));
+        assert_eq!(out.chars().count(), 21);
     }
 }
