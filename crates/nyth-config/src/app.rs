@@ -617,7 +617,7 @@ impl NythConfigApp {
         crate::theme::card(ui, "DPI switcher", |ui| {
             ui.vertical_centered(|ui| {
                 for i in 0..NYTH_CPI_LEVELS_NUM {
-                    crate::theme::centered_row_sized(ui, 540.0, 34.0, |ui| {
+                    crate::theme::centered_row_fit_sized(ui, 34.0, |ui| {
                         let mut en = settings.cpi_levels_enabled & (1 << i) != 0;
                         if ui.checkbox(&mut en, "").changed() {
                             if en {
@@ -668,7 +668,7 @@ impl NythConfigApp {
                     });
                 }
                 ui.add_space(4.0);
-                crate::theme::centered_row(ui, 320.0, |ui| {
+                crate::theme::centered_row_fit(ui, |ui| {
                     ui.label("Active level:");
                     for i in 0..NYTH_CPI_LEVELS_NUM {
                         if ui
@@ -695,7 +695,7 @@ impl NythConfigApp {
                 // This is the synced control: Y follows X unless advanced
                 // sensitivity (Advanced tab) has split the axes.
                 let mut sx = settings.sensitivity_x as f32 - 6.0;
-                crate::theme::centered_row_sized(ui, 500.0, 34.0, |ui| {
+                crate::theme::centered_row_fit_sized(ui, 34.0, |ui| {
                     let mut slider =
                         crate::widgets::SegmentedSlider::new(&mut sx, -5.0..=5.0).width(300.0);
                     for t in -5..=5 {
@@ -810,7 +810,7 @@ impl NythConfigApp {
                 for (axis, value, enabled) in axes {
                     // −5…+5 display, device stores 1…11 (see Settings tab).
                     let mut v = value as f32 - 6.0;
-                    crate::theme::centered_row_sized(ui, 540.0, 34.0, |ui| {
+                    crate::theme::centered_row_fit_sized(ui, 34.0, |ui| {
                         ui.add_sized(
                             [30.0, 20.0],
                             egui::Label::new(format!("{axis}:")).halign(egui::Align::Max),
@@ -889,12 +889,11 @@ impl NythConfigApp {
                             ))
                             .weak(),
                         );
-                        // Plain horizontal inside the card's centred
-                        // vertical: the group centres itself. (The old
-                        // fixed-width `centered_row` strip packed the
-                        // radios against its left edge, so the pair
-                        // visibly drifted left of the card centre.)
-                        ui.horizontal(|ui| {
+                        // Measured and centred as a group (a plain
+                        // horizontal fills the card and packs left; the
+                        // old fixed-width `centered_row` strip packed
+                        // narrower content against its left edge too).
+                        crate::theme::centered_row_fit(ui, |ui| {
                             // The device only ever switches the TCU on
                             // through the surface-calibration handshake,
                             // so selecting "On" opens the wizard and
@@ -946,8 +945,9 @@ impl NythConfigApp {
                             )
                             .weak(),
                         );
-                        // Centred group (see the TCU note above).
-                        ui.horizontal(|ui| {
+                        // Measured and centred as a group (see the TCU
+                        // note above).
+                        crate::theme::centered_row_fit(ui, |ui| {
                             for d in DistanceControl::ALL {
                                 if ui.radio(d == current, Self::dcu_label(d)).clicked()
                                     && d != current
@@ -1393,7 +1393,7 @@ impl NythConfigApp {
                 style.spacing.interact_size = egui::vec2(26.0, 26.0);
                 ui.vertical_centered(|ui| {
                     for (i, zone) in ["Logo", "Bottom"].iter().enumerate() {
-                        crate::theme::centered_row(ui, 460.0, |ui| {
+                        crate::theme::centered_row_fit(ui, |ui| {
                             ui.add_sized(
                                 [72.0, 26.0],
                                 egui::Label::new(format!("{zone}:")).halign(egui::Align::Max),
@@ -1435,7 +1435,7 @@ impl NythConfigApp {
             ui.add_space(8.0);
             crate::theme::card(ui, "Effects", |ui| {
                 ui.vertical_centered(|ui| {
-                    crate::theme::centered_row(ui, 420.0, |ui| {
+                    crate::theme::centered_row_fit(ui, |ui| {
                         ui.label("Light effect:");
                         for (v, l) in [
                             (1u8, "Fully lit"),
@@ -1464,7 +1464,7 @@ impl NythConfigApp {
                         });
                     }
                     ui.add_space(4.0);
-                    crate::theme::centered_row(ui, 430.0, |ui| {
+                    crate::theme::centered_row_fit(ui, |ui| {
                         ui.label("Colour effect:");
                         for (v, l) in [(0u8, "Off"), (1, "Simultaneously"), (2, "Up"), (3, "Down")]
                         {
@@ -1903,33 +1903,32 @@ impl NythConfigApp {
         } else {
             self.buttons_dirty
         };
-        // Centred group in its own row of the pinned bottom strip.
-        // (Deliberately not `Ui::horizontal_centered`: that only centres
-        // items vertically and claims the full available height, so the
-        // row drifts left and floats.)
-        ui.vertical_centered(|ui| {
-            ui.horizontal(|ui| {
-                let label = if is_settings {
-                    "Apply settings"
-                } else {
-                    "Apply button mappings"
-                };
-                if ui.add_enabled(dirty, egui::Button::new(label)).clicked() {
-                    if is_settings {
-                        self.apply_settings(ctx);
-                    } else {
-                        self.apply_buttons(ctx);
-                    }
-                }
-                if ui.add_enabled(dirty, egui::Button::new("Revert")).clicked() {
-                    self.load_pending_from_profile();
-                    self.set_status("Changes reverted", ctx);
-                }
-                if dirty {
-                    ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
-                }
+        // The buttons hug the centre line of the pinned bottom strip at
+        // any font scale (theme half-strip trick); the unsaved-changes
+        // note gets its own centred line above them.
+        if dirty {
+            ui.vertical_centered(|ui| {
+                ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
             });
-        });
+        }
+        let label = if is_settings {
+            "Apply settings"
+        } else {
+            "Apply button mappings"
+        };
+        let (apply_clicked, revert_clicked) =
+            crate::theme::centered_pair_enabled(ui, dirty, label, dirty, "Revert");
+        if apply_clicked {
+            if is_settings {
+                self.apply_settings(ctx);
+            } else {
+                self.apply_buttons(ctx);
+            }
+        }
+        if revert_clicked {
+            self.load_pending_from_profile();
+            self.set_status("Changes reverted", ctx);
+        }
     }
 
     // ─── Auto-switch panel (vertical stacked layout) ──────────
@@ -2151,35 +2150,34 @@ impl NythConfigApp {
                                     // empty capture slots.
                                     if apps.len() < max_apps {
                                         ui.add_space(2.0);
+                                        // A single widget added straight
+                                        // to the centring layout hugs the
+                                        // centre line at natural width.
                                         ui.vertical_centered(|ui| {
-                                            ui.horizontal(|ui| {
-                                                if cap_here {
-                                                    ui.label(
-                                                        egui::RichText::new(
-                                                            "Waiting for you to click a window…",
-                                                        )
-                                                        .weak()
-                                                        .italics(),
-                                                    );
-                                                } else if ui.button("＋ Add application").clicked()
-                                                {
-                                                    let slot = self
-                                                        .state
-                                                        .autoswitch
-                                                        .apps_for_profile(profile_idx)
-                                                        .len();
-                                                    self.capturing_for =
-                                                        Some((profile_idx, slot));
-                                                    DeviceState::start_capture();
-                                                    self.set_status(
-                                                        format!(
-                                                            "Click a window to add it to Mouse Profile {}…",
-                                                            profile_idx + 1
-                                                        ),
-                                                        ctx,
-                                                    );
-                                                }
-                                            });
+                                            if cap_here {
+                                                ui.label(
+                                                    egui::RichText::new(
+                                                        "Waiting for you to click a window…",
+                                                    )
+                                                    .weak()
+                                                    .italics(),
+                                                );
+                                            } else if ui.button("＋ Add application").clicked() {
+                                                let slot = self
+                                                    .state
+                                                    .autoswitch
+                                                    .apps_for_profile(profile_idx)
+                                                    .len();
+                                                self.capturing_for = Some((profile_idx, slot));
+                                                DeviceState::start_capture();
+                                                self.set_status(
+                                                    format!(
+                                                        "Click a window to add it to Mouse Profile {}…",
+                                                        profile_idx + 1
+                                                    ),
+                                                    ctx,
+                                                );
+                                            }
                                         });
                                         ui.add_space(6.0);
                                         band.paint_bar(
@@ -2289,50 +2287,46 @@ impl NythConfigApp {
     }
 
     fn ui_autoswitch_save_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        // Centred group in its own row of the pinned bottom strip (same
-        // vertical_centered + horizontal pair as `apply_revert_bar`).
-        ui.vertical_centered(|ui| {
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        self.autoswitch_dirty,
-                        egui::Button::new("Save auto-switch settings"),
-                    )
-                    .clicked()
-                {
-                    match self.state.save_autoswitch() {
-                        Ok(()) => {
-                            self.autoswitch_dirty = false;
-                            // Tell the daemon to reload config. If the nudge
-                            // fails the daemon still picks the file up via its
-                            // mtime watch, but say so instead of staying quiet.
-                            match DeviceState::notify_daemon_config_changed() {
-                                Ok(()) => self.set_status("Auto-switch settings saved", ctx),
-                                Err(e) => {
-                                    log::warn!("Saved, but could not notify daemon: {}", e);
-                                    self.set_status(
-                                    "Saved - daemon unreachable, it will reload the file shortly",
-                                    ctx,
-                                );
-                                }
-                            }
+        // Buttons hug the centre line of the pinned bottom strip (theme
+        // half-strip trick); the unsaved-changes note sits centred above.
+        if self.autoswitch_dirty {
+            ui.vertical_centered(|ui| {
+                ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
+            });
+        }
+        let (save_clicked, revert_clicked) = crate::theme::centered_pair_enabled(
+            ui,
+            self.autoswitch_dirty,
+            "Save auto-switch settings",
+            self.autoswitch_dirty,
+            "Revert",
+        );
+        if save_clicked {
+            match self.state.save_autoswitch() {
+                Ok(()) => {
+                    self.autoswitch_dirty = false;
+                    // Tell the daemon to reload config. If the nudge
+                    // fails the daemon still picks the file up via its
+                    // mtime watch, but say so instead of staying quiet.
+                    match DeviceState::notify_daemon_config_changed() {
+                        Ok(()) => self.set_status("Auto-switch settings saved", ctx),
+                        Err(e) => {
+                            log::warn!("Saved, but could not notify daemon: {}", e);
+                            self.set_status(
+                                "Saved - daemon unreachable, it will reload the file shortly",
+                                ctx,
+                            );
                         }
-                        Err(e) => self.set_status(format!("Error saving: {}", e), ctx),
                     }
                 }
-                if ui
-                    .add_enabled(self.autoswitch_dirty, egui::Button::new("Revert"))
-                    .clicked()
-                {
-                    self.state.autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
-                    self.autoswitch_dirty = false;
-                    self.set_status("Auto-switch settings reverted", ctx);
-                }
-                if self.autoswitch_dirty {
-                    ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
-                }
-            });
-        });
+                Err(e) => self.set_status(format!("Error saving: {}", e), ctx),
+            }
+        }
+        if revert_clicked {
+            self.state.autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
+            self.autoswitch_dirty = false;
+            self.set_status("Auto-switch settings reverted", ctx);
+        }
     }
 }
 
