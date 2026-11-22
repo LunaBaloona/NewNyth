@@ -34,11 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   two-column grid when the window is wide enough (still stacked when
   narrow).
 - GUI polish: the Apply/Save and Revert buttons now sit centred in
-  their own row at the bottom of every section (the Auto-Switch save
-  bar moved from above the profile cards down to the bottom of the
-  tab), and the "+ Add application" button sits centred at the top of
-  each Mouse Profile card, directly below its header, so the new slot
-  appears right underneath it.
+  their own row inside a pinned bottom strip on every section (the
+  Buttons tab already had such a dedicated bottom section; Settings,
+  Advanced and Lighting now share one, and the Auto-Switch save bar
+  moved there from the top of its tab). Each Auto-Switch Mouse Profile
+  card gained a second header: the "+ Add application" button centred
+  directly below the profile title, closed off by a card-wide rule, so
+  captured slots appear right underneath it.
+- GUI polish: the Tracking and Distance Control Unit radio rows centre
+  within their cards, and the small grey helper texts on the Advanced
+  tab (polling rate, TCU and DCU descriptions plus the mouse-wide
+  settings note) use the normal font size while staying grey.
 
 ### Removed
 

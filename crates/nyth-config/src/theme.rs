@@ -183,6 +183,17 @@ impl CardRowBand {
         );
         self.painter.rect_filled(rect, 0.0, self.fill);
     }
+
+    /// Paint a thin full-width rule (rounded ends), inset slightly from
+    /// the card edges: closes off the add-application sub-header inside
+    /// the Auto-Switch cards.
+    pub fn paint_bar(&self, top: f32, height: f32, fill: egui::Color32) {
+        let rect = egui::Rect::from_min_max(
+            egui::pos2(self.left + 4.0, top),
+            egui::pos2(self.right - 4.0, top + height),
+        );
+        self.painter.rect_filled(rect, height / 2.0, fill);
+    }
 }
 
 /// Full-width ACCENT-blue horizontal rule (keypad row separation in the
