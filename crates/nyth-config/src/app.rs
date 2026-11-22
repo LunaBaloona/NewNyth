@@ -106,6 +106,9 @@ pub struct NythConfigApp {
     switch_prompt: Option<u8>,
     /// Set when a window close was intercepted because edits are pending.
     close_prompt: bool,
+    /// Set once the guard dialog answered "quit": lets the close request
+    /// through even though the dirty flags may still be set.
+    quitting: bool,
     /// Auto-switch card whose header name field is open (pencil button).
     name_editing: Option<u8>,
     /// Ask the header name field for keyboard focus once it appears.
@@ -154,6 +157,7 @@ impl NythConfigApp {
             dcu_keep: None,
             switch_prompt: None,
             close_prompt: false,
+            quitting: false,
             name_editing: None,
             name_edit_focus: false,
             last_profile_poll: std::time::Instant::now(),
@@ -396,8 +400,9 @@ impl eframe::App for NythConfigApp {
 
         // Unsaved-edit guard for the window close button: eframe would quit
         // without asking, so cancel the close while edits are pending and
-        // let `ui_close_confirm` decide what happens next.
-        if ctx.input(|i| i.viewport().close_requested()) && self.has_unsaved() {
+        // let `ui_close_confirm` decide what happens next. `quitting` marks
+        // an answered dialog: its own close request must not be re-cancelled.
+        if ctx.input(|i| i.viewport().close_requested()) && self.has_unsaved() && !self.quitting {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.close_prompt = true;
         }
@@ -1393,14 +1398,24 @@ impl NythConfigApp {
             // On a failed device write stay on the current profile with the
             // dialog open; the status bar shows the error. Nothing is lost.
             if self.save_all_pending(ctx) {
-                self.selected_profile = target;
-                self.load_pending_from_profile();
-                self.switch_prompt = None;
+                self.perform_profile_switch(target, ctx);
             }
         } else if discard_and_switch {
-            self.selected_profile = target;
-            self.load_pending_from_profile();
-            self.switch_prompt = None;
+            self.perform_profile_switch(target, ctx);
+        }
+    }
+
+    /// Answer to the switch guard: move the editor to `target` and apply
+    /// the same Auto-apply follow-through the plain profile-bar click does
+    /// (that check runs in the click's own frame, which the dialog answer
+    /// comes after). Without this the device would keep the old profile
+    /// while the GUI shows the new one.
+    fn perform_profile_switch(&mut self, target: u8, ctx: &egui::Context) {
+        self.selected_profile = target;
+        self.load_pending_from_profile();
+        self.switch_prompt = None;
+        if self.auto_apply_profile && self.selected_profile != self.state.active_profile {
+            self.activate_profile_on_device(target, ctx);
         }
     }
 
@@ -1442,10 +1457,12 @@ impl NythConfigApp {
         if save_and_quit {
             if self.save_all_pending(ctx) {
                 self.close_prompt = false;
+                self.quitting = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         } else if discard_and_quit {
             self.close_prompt = false;
+            self.quitting = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         } else if keep_editing || !open {
             self.close_prompt = false;
