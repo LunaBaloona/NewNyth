@@ -550,14 +550,27 @@ impl eframe::App for NythConfigApp {
                 self.section,
                 Section::Settings | Section::Advanced | Section::Lighting
             ) {
-                // Long card stacks must stay reachable when the window is
-                // short. Auto-switch keeps its own profile scroll (the save
-                // bar has to live outside it) and must not be wrapped twice.
+                // The Apply/Revert bar sits in a pinned bottom strip (the
+                // Buttons tab's dedicated bottom section, reduced to just
+                // the bar), so it stays at the foot of the tab instead of
+                // floating at the end of the scroll body. Long card stacks
+                // must stay reachable when the window is short.
+                egui::Panel::bottom("section_actions").show(ui, |ui| {
+                    ui.separator();
+                    self.apply_revert_bar(ui, &ctx, true);
+                });
                 egui::ScrollArea::vertical()
                     .id_salt("section_scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| self.ui_section(ui, &ctx));
             } else {
+                // Auto-switch: its save bar pins to the same bottom-strip
+                // style; the profile cards keep their own width-wrapping
+                // scroll above it and must not be wrapped twice.
+                egui::Panel::bottom("autoswitch_actions").show(ui, |ui| {
+                    ui.separator();
+                    self.ui_autoswitch_save_bar(ui, &ctx);
+                });
                 self.ui_section(ui, &ctx);
             }
         });
@@ -586,7 +599,7 @@ impl NythConfigApp {
         }
     }
 
-    fn ui_settings(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn ui_settings(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
         let settings = match self.pending_settings.as_mut() {
             Some(s) => s as *mut ProfileSettings,
             None => {
@@ -708,9 +721,6 @@ impl NythConfigApp {
                 }
             });
         });
-
-        ui.add_space(12.0);
-        self.apply_revert_bar(ui, ctx, true);
     }
 
     // ─── Advanced panel (Swarm's third tab) ──────────────────────────
@@ -784,12 +794,8 @@ impl NythConfigApp {
             egui::RichText::new(
                 "Tracking and lift-off distance are mouse-wide settings: they apply immediately and are shared by all profiles.",
             )
-            .small()
             .weak(),
         );
-
-        ui.add_space(8.0);
-        self.apply_revert_bar(ui, ctx, true);
     }
 
     /// Split-axis sensitivity card (Advanced tab, per-profile).
@@ -849,9 +855,7 @@ impl NythConfigApp {
         crate::theme::card(ui, "Polling rate", |ui| {
             ui.vertical_centered(|ui| {
                 ui.label(
-                    egui::RichText::new("How often the mouse reports to the computer.")
-                        .small()
-                        .weak(),
+                    egui::RichText::new("How often the mouse reports to the computer.").weak(),
                 );
                 let mut rate = settings.polling_rate;
                 ui.vertical_centered(|ui| {
@@ -883,10 +887,14 @@ impl NythConfigApp {
                                 "Lift-off detection is currently {}.",
                                 if on { "on" } else { "off" }
                             ))
-                            .small()
                             .weak(),
                         );
-                        crate::theme::centered_row(ui, 220.0, |ui| {
+                        // Plain horizontal inside the card's centred
+                        // vertical: the group centres itself. (The old
+                        // fixed-width `centered_row` strip packed the
+                        // radios against its left edge, so the pair
+                        // visibly drifted left of the card centre.)
+                        ui.horizontal(|ui| {
                             // The device only ever switches the TCU on
                             // through the surface-calibration handshake,
                             // so selecting "On" opens the wizard and
@@ -910,7 +918,6 @@ impl NythConfigApp {
                             egui::RichText::new(
                                 "Switching it back on runs the surface-calibration wizard.",
                             )
-                            .small()
                             .weak(),
                         );
                     }
@@ -918,7 +925,6 @@ impl NythConfigApp {
                         ui.label("Could not read the sensor state.");
                         ui.label(
                             egui::RichText::new("Use ↻ Refresh once the mouse is reachable.")
-                                .small()
                                 .weak(),
                         );
                     }
@@ -938,10 +944,10 @@ impl NythConfigApp {
                             egui::RichText::new(
                                 "Lift-off distance: how high the mouse may float before tracking stops.",
                             )
-                            .small()
                             .weak(),
                         );
-                        crate::theme::centered_row(ui, 420.0, |ui| {
+                        // Centred group (see the TCU note above).
+                        ui.horizontal(|ui| {
                             for d in DistanceControl::ALL {
                                 if ui.radio(d == current, Self::dcu_label(d)).clicked()
                                     && d != current
@@ -1344,7 +1350,7 @@ impl NythConfigApp {
 
     // ─── Lighting panel ──────────────────────────────────────
 
-    fn ui_lighting(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn ui_lighting(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
         let settings = match self.pending_settings.as_mut() {
             Some(s) => s as *mut ProfileSettings,
             None => {
@@ -1473,9 +1479,6 @@ impl NythConfigApp {
                 });
             });
         }
-
-        ui.add_space(12.0);
-        self.apply_revert_bar(ui, ctx, true);
     }
 
     // ─── Buttons panel (v0.7.1: 4-quadrant layout) ──────────
@@ -1900,28 +1903,32 @@ impl NythConfigApp {
         } else {
             self.buttons_dirty
         };
-        // Centred in its own row, the same placement every section's
-        // apply/save + revert bar uses.
-        ui.horizontal_centered(|ui| {
-            let label = if is_settings {
-                "Apply settings"
-            } else {
-                "Apply button mappings"
-            };
-            if ui.add_enabled(dirty, egui::Button::new(label)).clicked() {
-                if is_settings {
-                    self.apply_settings(ctx);
+        // Centred group in its own row of the pinned bottom strip.
+        // (Deliberately not `Ui::horizontal_centered`: that only centres
+        // items vertically and claims the full available height, so the
+        // row drifts left and floats.)
+        ui.vertical_centered(|ui| {
+            ui.horizontal(|ui| {
+                let label = if is_settings {
+                    "Apply settings"
                 } else {
-                    self.apply_buttons(ctx);
+                    "Apply button mappings"
+                };
+                if ui.add_enabled(dirty, egui::Button::new(label)).clicked() {
+                    if is_settings {
+                        self.apply_settings(ctx);
+                    } else {
+                        self.apply_buttons(ctx);
+                    }
                 }
-            }
-            if ui.add_enabled(dirty, egui::Button::new("Revert")).clicked() {
-                self.load_pending_from_profile();
-                self.set_status("Changes reverted", ctx);
-            }
-            if dirty {
-                ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
-            }
+                if ui.add_enabled(dirty, egui::Button::new("Revert")).clicked() {
+                    self.load_pending_from_profile();
+                    self.set_status("Changes reverted", ctx);
+                }
+                if dirty {
+                    ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
+                }
+            });
         });
     }
 
@@ -1954,8 +1961,6 @@ impl NythConfigApp {
         if !self.state.autoswitch.enabled {
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Auto-switching is disabled.").weak());
-            ui.add_space(8.0);
-            self.ui_autoswitch_save_bar(ui, ctx);
             return;
         }
 
@@ -1991,18 +1996,8 @@ impl NythConfigApp {
         let num_cols = (((avail_w + gap) / (min_card_w + gap)).floor() as usize)
             .clamp(1, NYTH_PROFILE_NUM as usize);
 
-        // The save bar keeps its own centred row at the bottom of the tab,
-        // like every other section's Apply/Revert bar. A plain vertical
-        // ScrollArea claims all remaining window height, so anything added
-        // after it falls outside the window and can never be seen or
-        // clicked (the bug that once made captured apps unsaveable): pin
-        // the scroll to the height the bar leaves over and add it below.
-        let bar_h = ui.spacing().interact_size.y + ui.spacing().item_spacing.y + 8.0;
-        let scroll_h = (ui.available_height() - bar_h).max(140.0);
         egui::ScrollArea::vertical()
             .id_salt("autoswitch_main_scroll")
-            .auto_shrink([false, false])
-            .max_height(scroll_h)
             .show(ui, |ui| {
                 // Row-major flow: 1 2 3 across the top, 4 5 (… 6) below.
                 // Each card stretches to fill an equal-width cell of its row.
@@ -2145,44 +2140,56 @@ impl NythConfigApp {
                                         .to_vec();
                                     let mut to_remove: Option<usize> = None;
 
-                                    // The add button sits centred at the
-                                    // top of the card body, right below the
-                                    // header strip; the slot it captures
-                                    // then appears directly underneath it.
+                                    let row_h = ui.spacing().interact_size.y;
+                                    let band = crate::theme::CardRowBand::for_card(ui);
+
+                                    // A second header strip below the Mouse
+                                    // Profile bar: the add button centred in
+                                    // it, closed off by a card-wide rule;
+                                    // captured slots appear below the rule.
                                     // One compact row instead of a wall of
                                     // empty capture slots.
                                     if apps.len() < max_apps {
-                                        ui.horizontal_centered(|ui| {
-                                            if cap_here {
-                                                ui.label(
-                                                    egui::RichText::new(
-                                                        "Waiting for you to click a window…",
-                                                    )
-                                                    .weak()
-                                                    .italics(),
-                                                );
-                                            } else if ui.button("＋ Add application").clicked() {
-                                                let slot = self
-                                                    .state
-                                                    .autoswitch
-                                                    .apps_for_profile(profile_idx)
-                                                    .len();
-                                                self.capturing_for = Some((profile_idx, slot));
-                                                DeviceState::start_capture();
-                                                self.set_status(
-                                                    format!(
-                                                        "Click a window to add it to Mouse Profile {}…",
-                                                        profile_idx + 1
-                                                    ),
-                                                    ctx,
-                                                );
-                                            }
+                                        ui.add_space(2.0);
+                                        ui.vertical_centered(|ui| {
+                                            ui.horizontal(|ui| {
+                                                if cap_here {
+                                                    ui.label(
+                                                        egui::RichText::new(
+                                                            "Waiting for you to click a window…",
+                                                        )
+                                                        .weak()
+                                                        .italics(),
+                                                    );
+                                                } else if ui.button("＋ Add application").clicked()
+                                                {
+                                                    let slot = self
+                                                        .state
+                                                        .autoswitch
+                                                        .apps_for_profile(profile_idx)
+                                                        .len();
+                                                    self.capturing_for =
+                                                        Some((profile_idx, slot));
+                                                    DeviceState::start_capture();
+                                                    self.set_status(
+                                                        format!(
+                                                            "Click a window to add it to Mouse Profile {}…",
+                                                            profile_idx + 1
+                                                        ),
+                                                        ctx,
+                                                    );
+                                                }
+                                            });
                                         });
-                                        ui.add_space(4.0);
+                                        ui.add_space(6.0);
+                                        band.paint_bar(
+                                            ui.cursor().min.y - 3.0,
+                                            3.0,
+                                            crate::theme::EDGE,
+                                        );
+                                        ui.add_space(6.0);
                                     }
 
-                                    let row_h = ui.spacing().interact_size.y;
-                                    let band = crate::theme::CardRowBand::for_card(ui);
                                     for (slot, app) in apps.iter().enumerate() {
                                         // Same alternating bands as the
                                         // button grids: light grey on the
@@ -2279,52 +2286,52 @@ impl NythConfigApp {
                     ui.add_space(8.0);
                 }
             });
-
-        ui.add_space(4.0);
-        self.ui_autoswitch_save_bar(ui, ctx);
     }
 
     fn ui_autoswitch_save_bar(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        // Centred in its own row, like the other tabs' Apply/Revert bars.
-        ui.horizontal_centered(|ui| {
-            if ui
-                .add_enabled(
-                    self.autoswitch_dirty,
-                    egui::Button::new("Save auto-switch settings"),
-                )
-                .clicked()
-            {
-                match self.state.save_autoswitch() {
-                    Ok(()) => {
-                        self.autoswitch_dirty = false;
-                        // Tell the daemon to reload config. If the nudge
-                        // fails the daemon still picks the file up via its
-                        // mtime watch, but say so instead of staying quiet.
-                        match DeviceState::notify_daemon_config_changed() {
-                            Ok(()) => self.set_status("Auto-switch settings saved", ctx),
-                            Err(e) => {
-                                log::warn!("Saved, but could not notify daemon: {}", e);
-                                self.set_status(
+        // Centred group in its own row of the pinned bottom strip (same
+        // vertical_centered + horizontal pair as `apply_revert_bar`).
+        ui.vertical_centered(|ui| {
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        self.autoswitch_dirty,
+                        egui::Button::new("Save auto-switch settings"),
+                    )
+                    .clicked()
+                {
+                    match self.state.save_autoswitch() {
+                        Ok(()) => {
+                            self.autoswitch_dirty = false;
+                            // Tell the daemon to reload config. If the nudge
+                            // fails the daemon still picks the file up via its
+                            // mtime watch, but say so instead of staying quiet.
+                            match DeviceState::notify_daemon_config_changed() {
+                                Ok(()) => self.set_status("Auto-switch settings saved", ctx),
+                                Err(e) => {
+                                    log::warn!("Saved, but could not notify daemon: {}", e);
+                                    self.set_status(
                                     "Saved - daemon unreachable, it will reload the file shortly",
                                     ctx,
                                 );
+                                }
                             }
                         }
+                        Err(e) => self.set_status(format!("Error saving: {}", e), ctx),
                     }
-                    Err(e) => self.set_status(format!("Error saving: {}", e), ctx),
                 }
-            }
-            if ui
-                .add_enabled(self.autoswitch_dirty, egui::Button::new("Revert"))
-                .clicked()
-            {
-                self.state.autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
-                self.autoswitch_dirty = false;
-                self.set_status("Auto-switch settings reverted", ctx);
-            }
-            if self.autoswitch_dirty {
-                ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
-            }
+                if ui
+                    .add_enabled(self.autoswitch_dirty, egui::Button::new("Revert"))
+                    .clicked()
+                {
+                    self.state.autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
+                    self.autoswitch_dirty = false;
+                    self.set_status("Auto-switch settings reverted", ctx);
+                }
+                if self.autoswitch_dirty {
+                    ui.label(egui::RichText::new("● Unsaved changes").weak().italics());
+                }
+            });
         });
     }
 }
