@@ -46,6 +46,12 @@ fn hidiocsfeature_nr(len: usize) -> nix::libc::c_ulong {
 
 /// A handle to an open hidraw file descriptor for one HID interface
 /// endpoint of the Nyth.
+///
+/// Nyth ioctls form stateful sequences: a `select` decides what the
+/// *next* read returns, and every write must be followed by a control
+/// register check. Another process running its own sequence in between
+/// corrupts both, so multi-ioctl operations must hold [`Self::lock`]
+/// across all of their steps.
 #[derive(Debug)]
 pub struct HidrawDevice {
     file: File,
@@ -73,6 +79,54 @@ impl HidrawDevice {
     /// The filesystem path this device was opened from.
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    /// Acquire the exclusive device lock (blocks until it is free).
+    ///
+    /// The lock is an advisory `flock` on the device node, so it
+    /// serializes every NewNyth process that opens the mouse through
+    /// this crate (daemon, GUI, CLI). Tools that issue raw ioctls without
+    /// flock (e.g. roccat-tools) are not stopped by it.
+    ///
+    /// Multi-ioctl operations (select + read, write + control check)
+    /// must hold the returned guard across all of their steps.
+    pub fn lock(&self) -> Result<DeviceGuard<'_>> {
+        let rc = unsafe { nix::libc::flock(self.file.as_raw_fd(), nix::libc::LOCK_EX) };
+        if rc != 0 {
+            return Err(Error::Lock {
+                path: self.path.clone(),
+                source: nix::Error::last(),
+            });
+        }
+        Ok(DeviceGuard {
+            file: &self.file,
+            path: &self.path,
+        })
+    }
+
+    /// Non-blocking variant of [`Self::lock`]: returns `Ok(None)` when
+    /// another process currently holds the device.
+    pub fn try_lock(&self) -> Result<Option<DeviceGuard<'_>>> {
+        let rc = unsafe {
+            nix::libc::flock(
+                self.file.as_raw_fd(),
+                nix::libc::LOCK_EX | nix::libc::LOCK_NB,
+            )
+        };
+        if rc == 0 {
+            return Ok(Some(DeviceGuard {
+                file: &self.file,
+                path: &self.path,
+            }));
+        }
+        let err = nix::Error::last();
+        if err == nix::errno::Errno::EWOULDBLOCK {
+            return Ok(None);
+        }
+        Err(Error::Lock {
+            path: self.path.clone(),
+            source: err,
+        })
     }
 
     /// Read a HID feature report.
@@ -150,6 +204,27 @@ impl HidrawDevice {
     }
 }
 
+/// Exclusive device lock held for a multi-ioctl sequence, released when
+/// dropped. Created by [`HidrawDevice::lock`] / [`HidrawDevice::try_lock`].
+#[derive(Debug)]
+pub struct DeviceGuard<'a> {
+    file: &'a File,
+    path: &'a str,
+}
+
+impl Drop for DeviceGuard<'_> {
+    fn drop(&mut self) {
+        let rc = unsafe { nix::libc::flock(self.file.as_raw_fd(), nix::libc::LOCK_UN) };
+        if rc != 0 {
+            log::warn!(
+                "flock unlock failed on {}: {}",
+                self.path,
+                nix::Error::last()
+            );
+        }
+    }
+}
+
 // ─── Control register helpers ───────────────────────────────────────
 
 /// Poll the device control register until the write is acknowledged.
@@ -183,6 +258,9 @@ pub fn check_write(dev: &HidrawDevice, init_wait_ms: u64, busy_wait_ms: u64) -> 
 ///
 /// This tells the device which data to prepare for a subsequent read.
 /// Equivalent to the original `nyth_select()`.
+///
+/// Locking: select + the read it arms must be atomic with respect to
+/// other processes. Hold a [`DeviceGuard`] across both steps.
 pub fn select(dev: &HidrawDevice, profile_index: u8, data_index: u8, request: u8) -> Result<()> {
     let report = ControlReport {
         report_id: ReportId::Control as u8,
@@ -220,4 +298,41 @@ pub fn read_struct<T: bytemuck::Pod>(dev: &HidrawDevice, report_id: ReportId) ->
 /// Write a typed report struct to the device with check-write.
 pub fn write_struct<T: bytemuck::Pod>(dev: &HidrawDevice, data: &T) -> Result<()> {
     write_checked(dev, bytemuck::bytes_of(data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    /// The two handles below are opened on a regular file, but the point
+    /// under test is the kernel `flock` on the open file description, which
+    /// behaves identically for a shared `/dev/hidrawN` node.
+    #[test]
+    fn device_lock_is_exclusive_across_handles() {
+        let mut path = std::env::temp_dir();
+        path.push(format!("nyth-hid-lock-{}.test", std::process::id()));
+        let path_str = path.to_str().unwrap().to_string();
+
+        // Create a temp file to act as the shared device node.
+        {
+            let mut f = File::create(&path_str).unwrap();
+            f.write_all(b"x").unwrap();
+        }
+
+        let a = HidrawDevice::open(&path_str).unwrap();
+        let b = HidrawDevice::open(&path_str).unwrap();
+
+        let guard = a.lock().unwrap();
+
+        // A second handle cannot take the lock while it is held: this is
+        // what keeps another process's select+read from interleaving.
+        assert!(b.try_lock().unwrap().is_none(), "lock should be busy");
+
+        // Dropping the guard releases it for the next caller.
+        drop(guard);
+        assert!(b.try_lock().unwrap().is_some(), "lock should be free");
+
+        std::fs::remove_file(&path_str).ok();
+    }
 }

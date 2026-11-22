@@ -19,6 +19,12 @@ pub enum Error {
     #[error("Device returned error status: {0}")]
     DeviceStatus(ControlStatus),
 
+    #[error("Failed to acquire device lock on {path}: {source}")]
+    Lock { path: String, source: nix::Error },
+
+    #[error("Device replied with profile index {got} (expected {expected})")]
+    ProfileMismatch { expected: u8, got: u8 },
+
     #[error("Profile index {0} out of range (must be 0–4)")]
     ProfileOutOfRange(u8),
 
