@@ -8,6 +8,11 @@
 //! The Ubuntu font (Ubuntu Font Licence 1.0, bundled in `assets/fonts/`,
 //! license alongside) gives the UI a softer, rounder read than egui's
 //! default; it is also the family the original Swarm era loved on Linux.
+//!
+//! The positioning and alignment rules this module encodes (centring,
+//! truncation, header band geometry, and the egui 0.37 quirks behind
+//! them) are recorded in `docs/GUI-LAYOUT.md`. Read it before adding
+//! or changing any layout helper here.
 
 use eframe::egui;
 
