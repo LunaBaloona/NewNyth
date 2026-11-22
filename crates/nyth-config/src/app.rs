@@ -733,10 +733,17 @@ impl NythConfigApp {
         // use). The cards clamp their contents to the column width, so
         // a narrower column just shrinks the sliders, never overflows.
         let gap = ui.spacing().item_spacing.x.max(14.0);
-        let min_col_w = 560.0;
+        // `ui.horizontal` inserts its own item spacing between the three
+        // children (left card, spacer, right card) on top of the explicit
+        // gap; if the row is even a few points wider than the viewport,
+        // the right card spills past the window - account for every point
+        // here (same trap as the Button Assignment three-column block).
+        let junction = gap + ui.spacing().item_spacing.x;
+        let min_col_w = 500.0;
         let avail_w = ui.available_width();
-        let wide = avail_w >= 2.0 * min_col_w + gap;
-        let col_w = if wide { (avail_w - gap) / 2.0 } else { avail_w };
+        let col_w = (avail_w - 2.0 * junction - 2.0) / 2.0;
+        let wide = col_w >= min_col_w;
+        let col_w = if wide { col_w } else { avail_w };
 
         if wide {
             ui.horizontal(|ui| {
@@ -1626,6 +1633,7 @@ impl NythConfigApp {
         }
 
         let row_h = ui.spacing().interact_size.y;
+        let band = crate::theme::CardRowBand::for_card(ui);
         for (gi, group) in groups.into_iter().enumerate() {
             if gi > 0 {
                 ui.add_space(5.0);
@@ -1641,8 +1649,8 @@ impl NythConfigApp {
                 .striped(false)
                 .show(ui, |ui| {
                     for (row_i, i) in group.enumerate() {
-                        if row_i % 2 == 1 {
-                            crate::theme::card_row_band(ui, ui.cursor().min.y, row_h);
+                        if row_i % 2 == 0 {
+                            band.paint(ui.cursor().min.y, row_h);
                         }
                         let is_selected = self.selected_button == Some(i);
                         let btn = &mut buttons.buttons[i];
@@ -2130,11 +2138,13 @@ impl NythConfigApp {
                                     let mut to_remove: Option<usize> = None;
 
                                     let row_h = ui.spacing().interact_size.y;
+                                    let band = crate::theme::CardRowBand::for_card(ui);
                                     for (slot, app) in apps.iter().enumerate() {
                                         // Same alternating bands as the
-                                        // button grids, card-width.
-                                        if slot % 2 == 1 {
-                                            crate::theme::card_row_band(ui, ui.cursor().min.y, row_h);
+                                        // button grids: light grey on the
+                                        // first row, then dark, and so on.
+                                        if slot % 2 == 0 {
+                                            band.paint(ui.cursor().min.y, row_h);
                                         }
                                         ui.horizontal(|ui| {
                                             let name_w =
