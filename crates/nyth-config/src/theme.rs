@@ -293,17 +293,25 @@ fn card_inner<R>(
                 egui::UiBuilder::new()
                     .id_salt(("card_header", id))
                     .max_rect(title_rect)
-                    // A centring vertical layout parks each widget (the
-                    // title label, or the inline rename row) on the band's
-                    // centre line at its natural width.
-                    .layout(egui::Layout::top_down(egui::Align::Center)),
+                    // Centred both ways inside the header band: the title
+                    // (or the inline rename row) fills the band, and its
+                    // centred text sits on the band's middle line instead
+                    // of touching its top edge.
+                    .layout(egui::Layout::centered_and_justified(
+                        egui::Direction::LeftToRight,
+                    )),
             );
             match header.as_mut() {
                 Some(draw_header) => draw_header(&mut title_ui),
                 None => {
                     title_ui.add(
                         egui::Label::new(egui::RichText::new(title).strong())
-                            .halign(egui::Align::Center),
+                            .halign(egui::Align::Center)
+                            // One line, ever: a title that cannot fit the
+                            // band is ellipsised rather than wrapped onto
+                            // two lines (which would spill out of the
+                            // fixed-height header bar).
+                            .truncate(),
                     );
                 }
             }
