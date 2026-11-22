@@ -1771,10 +1771,8 @@ impl NythConfigApp {
     fn ui_button_detail(&mut self, ui: &mut egui::Ui, buttons: &mut ProfileButtons) {
         let btn_idx = match self.selected_button {
             Some(i) => i,
-            None => {
-                ui.label(egui::RichText::new("Click a button name above to configure it.").weak());
-                return;
-            }
+            // Nothing picked yet: the detail panel stays empty.
+            None => return,
         };
 
         let btn = &mut buttons.buttons[btn_idx];
@@ -2070,7 +2068,11 @@ impl NythConfigApp {
                                                 egui::Label::new(
                                                     egui::RichText::new(header.as_str()).strong(),
                                                 )
-                                                .halign(egui::Align::Center),
+                                                .halign(egui::Align::Center)
+                                                // One line: long profile names
+                                                // ellipsise instead of spilling
+                                                // over the header bar.
+                                                .truncate(),
                                             );
                                             return;
                                         }
