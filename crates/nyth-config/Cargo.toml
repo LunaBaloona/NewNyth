@@ -16,6 +16,6 @@ roccat-nyth-profile = { path = "../roccat-nyth-profile" }
 eframe.workspace = true
 egui.workspace = true # feature activation only; code uses eframe::egui
 image = { version = "0.25", default-features = false, features = ["png"] }
-dbus.workspace = true
+zbus.workspace = true
 log.workspace = true
 env_logger.workspace = true

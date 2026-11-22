@@ -813,26 +813,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
-name = "dbus"
-version = "0.9.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ab69f03cc8c4340c9c8e315114e1658e6775a9b16a04357973aa21cec22b32e"
-dependencies = [
- "libc",
- "libdbus-sys",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "dbus-crossroads"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64bff0bd181fba667660276c6b7ebdc50cff37ce593e7adf9e734f89c8f444e8"
-dependencies = [
- "dbus",
-]
-
-[[package]]
 name = "defmt"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1927,15 +1907,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
-name = "libdbus-sys"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "328c4789d42200f1eeec05bd86c9c13c7f091d2ba9a6ea35acdf51f31bc0f043"
-dependencies = [
- "pkg-config",
-]
-
-[[package]]
 name = "libloading"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2193,7 +2164,6 @@ dependencies = [
 name = "nyth-config"
 version = "0.9.4"
 dependencies = [
- "dbus",
  "eframe",
  "egui",
  "env_logger",
@@ -2201,6 +2171,7 @@ dependencies = [
  "log",
  "roccat-nyth-hid",
  "roccat-nyth-profile",
+ "zbus",
 ]
 
 [[package]]
@@ -2221,11 +2192,11 @@ name = "nythctl"
 version = "0.9.4"
 dependencies = [
  "clap",
- "dbus",
  "env_logger",
  "log",
  "roccat-nyth-hid",
  "roccat-nyth-profile",
+ "zbus",
 ]
 
 [[package]]
@@ -2233,13 +2204,12 @@ name = "nythd"
 version = "0.9.4"
 dependencies = [
  "bytemuck",
- "dbus",
- "dbus-crossroads",
  "env_logger",
  "log",
  "nix",
  "roccat-nyth-hid",
  "roccat-nyth-profile",
+ "zbus",
 ]
 
 [[package]]

@@ -4,6 +4,15 @@ use roccat_nyth_hid::protocol::*;
 use roccat_nyth_profile::NythDevice;
 use roccat_nyth_profile::config::{AutoSwitchConfig, OpenersConfig, ProfileNames};
 
+/// Session-bus connection with a call timeout. zbus 5 sets timeouts per
+/// connection (dbus 0.9 set them per proxy), so each GUI client call opens
+/// a short-lived connection.
+fn zbus_client(timeout: std::time::Duration) -> Result<zbus::blocking::Connection, zbus::Error> {
+    zbus::blocking::connection::Builder::session()
+        .map(|b| b.method_timeout(timeout))
+        .and_then(|b| b.build())
+}
+
 /// Cached state for a single profile.
 #[derive(Clone)]
 pub struct ProfileState {
@@ -207,17 +216,21 @@ impl DeviceState {
     /// Whether the nythd service currently owns its D-Bus name. The
     /// calibration wizard needs it to see the device's completion event.
     pub fn daemon_alive() -> bool {
-        let Ok(conn) = dbus::blocking::Connection::new_session() else {
+        let Ok(conn) = zbus_client(std::time::Duration::from_millis(500)) else {
             return false;
         };
-        let proxy = conn.with_proxy(
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            std::time::Duration::from_millis(500),
-        );
-        let result: Result<(bool,), _> =
-            proxy.method_call("org.freedesktop.DBus", "NameHasOwner", ("org.roccat.Nyth",));
-        result.map(|(has_owner,)| has_owner).unwrap_or(false)
+        let proxy: zbus::blocking::Proxy<'_> = match zbus::blocking::proxy::Builder::new(&conn)
+            .destination("org.freedesktop.DBus")
+            .and_then(|b| b.path("/org/freedesktop/DBus"))
+            .and_then(|b| b.interface("org.freedesktop.DBus"))
+            .and_then(|b| b.build())
+        {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        proxy
+            .call("NameHasOwner", &("org.roccat.Nyth",))
+            .unwrap_or(false)
     }
 
     pub fn save_openers(&self) -> Result<(), String> {
@@ -238,16 +251,17 @@ impl DeviceState {
     /// The daemon also polls its config files' mtime, so a failed nudge
     /// only delays pickup by roughly a second — it never loses the change.
     pub fn notify_daemon_config_changed() -> Result<(), String> {
-        let conn = dbus::blocking::Connection::new_session()
+        let conn = zbus_client(std::time::Duration::from_millis(500))
             .map_err(|e| format!("no session D-Bus: {}", e))?;
-        let proxy = conn.with_proxy(
-            "org.roccat.Nyth",
-            "/org/roccat/Nyth",
-            std::time::Duration::from_millis(500),
-        );
-        let result: Result<(), _> =
-            proxy.method_call("org.roccat.Nyth", "ConfigurationChangedOutside", ());
-        result.map_err(|e| format!("daemon call failed: {}", e))
+        let proxy: zbus::blocking::Proxy<'_> = zbus::blocking::proxy::Builder::new(&conn)
+            .destination("org.roccat.Nyth")
+            .and_then(|b| b.path("/org/roccat/Nyth"))
+            .and_then(|b| b.interface("org.roccat.Nyth"))
+            .and_then(|b| b.build())
+            .map_err(|e| format!("daemon call failed: {}", e))?;
+        proxy
+            .call::<_, _, ()>("ConfigurationChangedOutside", &())
+            .map_err(|e| format!("daemon call failed: {}", e))
     }
 
     /// Ask the daemon to capture the next focused window.
