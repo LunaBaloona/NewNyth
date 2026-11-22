@@ -42,6 +42,10 @@ const INTERACTIVE: egui::Color32 = egui::Color32::from_rgb(0xbf, 0xbf, 0xbf);
 /// stands out (the Swarm boxes have tinted, centred headings).
 const HEADER: egui::Color32 = egui::Color32::from_rgb(0x26, 0x2a, 0x2f);
 const HEADER_HEIGHT: f32 = 26.0;
+
+/// Two-line variant of the header strip (the Auto-Switch profile cards
+/// stack "Mouse Profile N" over the custom name).
+const HEADER_HEIGHT_TALL: f32 = 46.0;
 /// Width of the band pinned to the left edge of a card header when it
 /// carries a widget (room for one small icon button plus a margin).
 const HEADER_LEFT_W: f32 = 34.0;
@@ -253,9 +257,19 @@ fn card_inner<R>(
             ui.set_width(ui.available_width());
 
             // ── Header strip (lighter band, centred title) ──
+            // Auto-Switch profile cards carry a two-line title (profile
+            // number over custom name); every other header is one line.
+            let tall = header.is_some();
             let strip = egui::Rect::from_min_size(
                 ui.cursor().min,
-                egui::vec2(ui.available_width(), HEADER_HEIGHT),
+                egui::vec2(
+                    ui.available_width(),
+                    if tall {
+                        HEADER_HEIGHT_TALL
+                    } else {
+                        HEADER_HEIGHT
+                    },
+                ),
             );
             ui.allocate_space(strip.size());
             ui.painter().rect_filled(strip, 0.0, HEADER);
@@ -267,14 +281,11 @@ fn card_inner<R>(
                 0.0
             };
             let actions_w = if header_actions.is_some() { 150.0 } else { 0.0 };
-            // Trim both ends of the title band by the same (worst-case)
-            // width. The pencil band and the "Default" band are different
-            // widths, and an asymmetric band slid the centred title off
-            // the card's centre line by a different amount in each card.
-            let side = left_w.max(actions_w);
+            // The title gets all the space between the pencil and the
+            // action bands; its text centres inside that area.
             let title_rect = egui::Rect::from_min_max(
-                egui::pos2(strip.left() + side, strip.top()),
-                egui::pos2(strip.right() - side, strip.bottom()),
+                egui::pos2(strip.left() + left_w, strip.top()),
+                egui::pos2(strip.right() - actions_w, strip.bottom()),
             );
             if let Some(left) = header_left.as_mut() {
                 let left_rect = egui::Rect::from_min_max(
@@ -293,13 +304,16 @@ fn card_inner<R>(
                 egui::UiBuilder::new()
                     .id_salt(("card_header", id))
                     .max_rect(title_rect)
-                    // Centred both ways inside the header band: the title
-                    // (or the inline rename row) fills the band, and its
-                    // centred text sits on the band's middle line instead
-                    // of touching its top edge.
-                    .layout(egui::Layout::centered_and_justified(
-                        egui::Direction::LeftToRight,
-                    )),
+                    // Centred both ways inside the header band. A tall
+                    // band stacks the title's two lines top-down (the
+                    // header closure adds leading space so the block sits
+                    // on the bar's middle line); the single-line band
+                    // justifies horizontally as before.
+                    .layout(if tall {
+                        egui::Layout::top_down(egui::Align::Center)
+                    } else {
+                        egui::Layout::centered_and_justified(egui::Direction::LeftToRight)
+                    }),
             );
             match header.as_mut() {
                 Some(draw_header) => draw_header(&mut title_ui),

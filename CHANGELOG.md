@@ -40,7 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moved there from the top of its tab). Each Auto-Switch Mouse Profile
   card gained a second header: the "+ Add application" button centred
   directly below the profile title, closed off by a card-wide rule, so
-  captured slots appear right underneath it.
+  captured slots appear right underneath it. The placeholder note
+  below the Button Assignment grids ("Click a button name above to
+  configure it.") is gone; the panel stays blank until a button is
+  picked.
 - GUI polish: the Tracking and Distance Control Unit radio rows centre
   within their cards, and the small grey helper texts on the Advanced
   tab (polling rate, TCU and DCU descriptions plus the mouse-wide
@@ -51,7 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   effects, TCU and DCU radios) are measured and parked on the card's
   centre line instead of packing against a fixed-width strip's left
   edge. The "+ Add application" buttons and the Mouse Profile card
-  header titles centre on their cards the same way.
+  header titles centre on their cards the same way. The Mouse Profile
+  headers are now two lines tall: the fixed "Mouse Profile N" caption
+  centred above the custom name, spanning the full width between the
+  pencil button and the Default checkbox, each line ellipsised only
+  if even it cannot fit.
 
 ### Removed
 

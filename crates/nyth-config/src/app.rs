@@ -2037,16 +2037,14 @@ impl NythConfigApp {
 
                             ui.vertical(|ui| {
                                 ui.set_width(cell_w);
-                                // Fixed "Mouse Profile N" prefix, optional
-                                // PC-side name behind a colon.
-                                let name_suffix = self
+                                // Fixed "Mouse Profile N" heading plus the
+                                // optional custom name: drawn as two lines
+                                // in the taller header band.
+                                let custom_name = self
                                     .state
                                     .profile_names
                                     .get(profile_idx)
-                                    .map(|n| format!(": {}", n))
-                                    .unwrap_or_default();
-                                let header =
-                                    format!("Mouse Profile {}{}", profile_idx + 1, name_suffix);
+                                    .map(str::to_owned);
                                 crate::theme::card_with_header_and_actions(
                                     ui,
                                     &format!("autoswitch_profile_{}", profile_idx + 1),
@@ -2063,17 +2061,50 @@ impl NythConfigApp {
                                         }
                                     },
                                     &mut |ui| {
+                                        // The header band lays out
+                                        // top-down: pad the content down
+                                        // so the one- or two-line block
+                                        // sits on the bar's middle line.
+                                        let font_id = ui
+                                            .style()
+                                            .text_styles
+                                            .get(&egui::TextStyle::Body)
+                                            .cloned()
+                                            .unwrap_or_else(|| {
+                                                egui::FontId::proportional(14.0)
+                                            });
+                                        let lines = 1
+                                            + usize::from(!editing && custom_name.is_some());
+                                        let block_h = lines as f32
+                                            * ui.fonts_mut(|f| f.row_height(&font_id))
+                                            + (lines - 1) as f32 * ui.spacing().item_spacing.y;
+                                        let pad =
+                                            ((ui.max_rect().height() - block_h) * 0.5).max(0.0);
+                                        ui.add_space(pad);
                                         if !editing {
+                                            // Two lines: "Mouse Profile N"
+                                            // with the custom name (when
+                                            // set) centred below it. Each
+                                            // line ellipsises instead of
+                                            // spilling over the header bar.
                                             ui.add(
                                                 egui::Label::new(
-                                                    egui::RichText::new(header.as_str()).strong(),
+                                                    egui::RichText::new(format!(
+                                                        "Mouse Profile {}",
+                                                        profile_idx + 1
+                                                    ))
+                                                    .strong(),
                                                 )
                                                 .halign(egui::Align::Center)
-                                                // One line: long profile names
-                                                // ellipsise instead of spilling
-                                                // over the header bar.
                                                 .truncate(),
                                             );
+                                            if let Some(name) = &custom_name {
+                                                ui.add(
+                                                    egui::Label::new(name.as_str())
+                                                        .halign(egui::Align::Center)
+                                                        .truncate(),
+                                                );
+                                            }
                                             return;
                                         }
                                         // Inline rename: the field sits in the
