@@ -350,7 +350,7 @@ fn cmd_buttons(
 
     let mut printed_shift_header = false;
 
-    for i in 0..limit {
+    for (i, btn) in buttons.buttons.iter().enumerate().take(limit) {
         if i == NYTH_PHYSICAL_BUTTON_NUM && !printed_shift_header {
             println!();
             println!("EasyShift layer:");
@@ -358,7 +358,6 @@ fn cmd_buttons(
             printed_shift_header = true;
         }
 
-        let btn = &buttons.buttons[i];
         let name = display::BUTTON_NAMES[i];
         let action = display::button_type_name(btn.button_type);
 

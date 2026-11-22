@@ -15,12 +15,10 @@ edition = "2024"
 # image 0.25 requires 1.88; clap 4.6 requires 1.85.
 rust-version = "1.95"
 license = "GPL-2.0-or-later"
-authors = [
-    "NewNyth Contributors",
-    "Stefan Achatz (original roccat-tools author)",
-]
-description = "NewNyth is a modern Linux driver and configuration tool for the Roccat Nyth mouse"
-repository = "https://github.com/LunaBaloona/NewNyth"
+# Note: cargo 1.100 warns about unused `workspace.package` fields. Only the
+# fields actually inherited by member crates (version, edition, rust-version,
+# license) may live here; `description` is per-crate and the author/repo
+# attribution is carried by README, LICENSE and the packaging metadata.
 
 [workspace.dependencies]
 thiserror = "2"
