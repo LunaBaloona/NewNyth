@@ -728,7 +728,65 @@ impl NythConfigApp {
         ui.heading(format!("Profile {}: Advanced", self.selected_profile + 1));
         ui.add_space(8.0);
 
-        // ── Per-profile: split-axis sensitivity ──────────────────────
+        // Two-up when the window is wide enough, stacked when narrow
+        // (the same width-driven reflow the Auto-Switch profile cards
+        // use). The cards clamp their contents to the column width, so
+        // a narrower column just shrinks the sliders, never overflows.
+        let gap = ui.spacing().item_spacing.x.max(14.0);
+        let min_col_w = 560.0;
+        let avail_w = ui.available_width();
+        let wide = avail_w >= 2.0 * min_col_w + gap;
+        let col_w = if wide { (avail_w - gap) / 2.0 } else { avail_w };
+
+        if wide {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.set_width(col_w);
+                    self.card_advanced_sensitivity(ui, settings);
+                });
+                ui.add_space(gap);
+                ui.vertical(|ui| {
+                    ui.set_width(col_w);
+                    self.card_polling_rate(ui, settings);
+                });
+            });
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.set_width(col_w);
+                    self.card_tcu(ui, ctx);
+                });
+                ui.add_space(gap);
+                ui.vertical(|ui| {
+                    ui.set_width(col_w);
+                    self.card_dcu(ui, ctx);
+                });
+            });
+        } else {
+            self.card_advanced_sensitivity(ui, settings);
+            ui.add_space(8.0);
+            self.card_polling_rate(ui, settings);
+            ui.add_space(8.0);
+            self.card_tcu(ui, ctx);
+            ui.add_space(8.0);
+            self.card_dcu(ui, ctx);
+        }
+
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new(
+                "Tracking and lift-off distance are mouse-wide settings: they apply immediately and are shared by all profiles.",
+            )
+            .small()
+            .weak(),
+        );
+
+        ui.add_space(8.0);
+        self.apply_revert_bar(ui, ctx, true);
+    }
+
+    /// Split-axis sensitivity card (Advanced tab, per-profile).
+    fn card_advanced_sensitivity(&mut self, ui: &mut egui::Ui, settings: &mut ProfileSettings) {
         crate::theme::card(ui, "Advanced sensitivity", |ui| {
             ui.vertical_centered(|ui| {
                 let adv = settings.advanced_sensitivity != 0;
@@ -777,8 +835,10 @@ impl NythConfigApp {
                 }
             });
         });
+    }
 
-        ui.add_space(8.0);
+    /// Polling-rate card (Advanced tab, per-profile).
+    fn card_polling_rate(&mut self, ui: &mut egui::Ui, settings: &mut ProfileSettings) {
         crate::theme::card(ui, "Polling rate", |ui| {
             ui.vertical_centered(|ui| {
                 ui.label(
@@ -802,9 +862,10 @@ impl NythConfigApp {
                 });
             });
         });
+    }
 
-        // ── Device-level: sensor control units (report 0x0f) ─────────
-        ui.add_space(8.0);
+    /// Tracking Control Unit card (Advanced tab, mouse-wide setting).
+    fn card_tcu(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         crate::theme::card(ui, "Tracking Control Unit", |ui| {
             ui.vertical_centered(|ui| {
                 match self.state.control_unit {
@@ -857,8 +918,10 @@ impl NythConfigApp {
                 }
             });
         });
+    }
 
-        ui.add_space(8.0);
+    /// Distance Control Unit card (Advanced tab, mouse-wide setting).
+    fn card_dcu(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         crate::theme::card(ui, "Distance Control Unit", |ui| {
             ui.vertical_centered(|ui| {
                 match self.state.control_unit {
@@ -922,18 +985,6 @@ impl NythConfigApp {
                 }
             });
         });
-
-        ui.add_space(6.0);
-        ui.label(
-            egui::RichText::new(
-                "Tracking and lift-off distance are mouse-wide settings: they apply immediately and are shared by all profiles.",
-            )
-            .small()
-            .weak(),
-        );
-
-        ui.add_space(8.0);
-        self.apply_revert_bar(ui, ctx, true);
     }
 
     /// Swarm's labels for the lift-off distance settings.
@@ -1581,12 +1632,18 @@ impl NythConfigApp {
                 crate::theme::accent_rule(ui);
                 ui.add_space(5.0);
             }
+            // Hand-painted alternating bands: egui's `striped` only
+            // paints behind the grid's columns, but the band should
+            // reach the card edges (theme::card_row_band).
             egui::Grid::new(format!("{grid_id}_{gi}"))
                 .num_columns(2)
                 .spacing([8.0, 2.0])
-                .striped(true)
+                .striped(false)
                 .show(ui, |ui| {
-                    for i in group {
+                    for (row_i, i) in group.enumerate() {
+                        if row_i % 2 == 1 {
+                            crate::theme::card_row_band(ui, ui.cursor().min.y, row_h);
+                        }
                         let is_selected = self.selected_button == Some(i);
                         let btn = &mut buttons.buttons[i];
                         let name = if i >= NYTH_PHYSICAL_BUTTON_NUM {
@@ -2072,7 +2129,13 @@ impl NythConfigApp {
                                         .to_vec();
                                     let mut to_remove: Option<usize> = None;
 
+                                    let row_h = ui.spacing().interact_size.y;
                                     for (slot, app) in apps.iter().enumerate() {
+                                        // Same alternating bands as the
+                                        // button grids, card-width.
+                                        if slot % 2 == 1 {
+                                            crate::theme::card_row_band(ui, ui.cursor().min.y, row_h);
+                                        }
                                         ui.horizontal(|ui| {
                                             let name_w =
                                                 (ui.available_width() - 140.0).max(60.0);

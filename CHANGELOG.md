@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unless `RUST_LOG` is set, so the systemd journal no longer fills with
   one full D-Bus message dump per window activation. Set `RUST_LOG`
   (e.g. `zbus=trace`) to capture library internals while debugging.
+- GUI polish: alternating row bands in the Button Assignment grids now
+  span the full card width instead of stopping at the row content, the
+  Auto-Switch profile cards use the same card-width bands behind their
+  application rows, and the Advanced tab arranges its four cards in a
+  two-column grid when the window is wide enough (still stacked when
+  narrow).
 
 ### Removed
 
