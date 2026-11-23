@@ -3,16 +3,29 @@
 //! Exposes `org.roccat.Nyth` on the session bus at `/org/roccat/Nyth`.
 //!
 //! **Methods:**
-//! - `ProfileChangedOutside(byte)` — external profile change notification
-//! - `ProfileDataChangedOutside(byte)` — reload profile data
-//! - `ConfigurationChangedOutside()` — reload config
-//! - `OpenGui()` — launch the NewNyth GUI
-//! - `WindowActivated(string)` — called by KWin script when active window changes
-//! - `StartCapture()` — enter capture mode (next WindowActivated emits AppCaptured)
+//! - `ProfileChangedOutside(byte)` - another program (GUI, Mini or
+//!   nythctl) switched the profile; keeps the daemon's view in step
+//! - `ConfigurationChangedOutside()` - reload the JSON config files
+//! - `OpenGui()` - launch the NewNyth GUI
+//! - `WindowActivated(string)` - called by the KWin script whenever the
+//!   active window changes; this is what drives auto-switching
 //!
 //! **Signals:**
-//! - `ProfileChanged(byte)` — profile changed on device
-//! - `AppCaptured(string)` — emitted in capture mode with the captured app class
+//! - `ProfileChanged(byte)` - the active profile changed on the device
+//!
+//! The interface is deliberately small, because everything exported at
+//! 1.0 must stay stable for all of 1.x (see `docs/API-STABILITY.md`).
+//! `StartCapture`, the `AppCaptured` signal and
+//! `ProfileDataChangedOutside` were removed before 1.0: the first two
+//! did nothing at all and the third set a flag nothing ever read.
+//!
+//! **Bus name:** the name is intentionally shared with the
+//! (unmaintained) roccat-tools daemons, which use the very same
+//! `org.roccat.Nyth`. If both are installed the two clash; the name is
+//! requested without replacement, so whichever service starts first
+//! keeps the bus and the other logs a warning and runs without D-Bus.
+//! The name is kept for compatibility with existing integrations and
+//! the KWin script.
 //!
 //! Implemented with the zbus blocking API. Method dispatch runs on zbus's
 //! own executor thread, so the main loop no longer pumps the connection.
@@ -30,7 +43,6 @@ use zbus::{Message, interface};
 #[derive(Debug, Clone)]
 pub struct DaemonState {
     pub active_profile: u8,
-    pub profile_data_reload_requested: Option<u8>,
     pub config_reload_requested: bool,
 }
 
@@ -38,7 +50,6 @@ impl DaemonState {
     pub fn new(active_profile: u8) -> Self {
         Self {
             active_profile,
-            profile_data_reload_requested: None,
             config_reload_requested: false,
         }
     }
@@ -56,14 +67,6 @@ impl NythIface {
         log::info!("D-Bus: ProfileChangedOutside({})", number);
         if let Ok(mut s) = self.state.lock() {
             s.active_profile = number;
-        }
-    }
-
-    #[zbus(name = "ProfileDataChangedOutside")]
-    async fn profile_data_changed_outside(&self, number: u8) {
-        log::info!("D-Bus: ProfileDataChangedOutside({})", number);
-        if let Ok(mut s) = self.state.lock() {
-            s.profile_data_reload_requested = Some(number);
         }
     }
 
@@ -92,16 +95,8 @@ impl NythIface {
         }
     }
 
-    #[zbus(name = "StartCapture")]
-    async fn start_capture(&self) {
-        log::trace!("D-Bus: StartCapture - handled via file");
-    }
-
     #[zbus(signal)]
     async fn profile_changed(emitter: &SignalEmitter<'_>, number: u8) -> zbus::Result<()>;
-
-    #[zbus(signal)]
-    async fn app_captured(emitter: &SignalEmitter<'_>, app_class: String) -> zbus::Result<()>;
 }
 
 pub struct NythDbusServer {
@@ -163,7 +158,6 @@ impl NythDbusServer {
 
     pub fn clear_reload_flags(&self) {
         if let Ok(mut s) = self.state.lock() {
-            s.profile_data_reload_requested = None;
             s.config_reload_requested = false;
         }
     }

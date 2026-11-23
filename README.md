@@ -253,15 +253,22 @@ nythctl --version           # Print version
 |------|------|-------------|
 | Signal | `ProfileChanged(byte)` | Emitted when the active profile changes |
 | Method | `ProfileChangedOutside(byte)` | Notify daemon of external profile change |
-| Method | `ProfileDataChangedOutside(byte)` | Tell daemon to reload profile data |
 | Method | `ConfigurationChangedOutside()` | Tell daemon to reload config files |
 | Method | `OpenGui()` | Launch the NewNyth GUI |
+| Method | `WindowActivated(string)` | Called by the KWin script when the active window changes |
 
 Monitor signals:
 
 ```bash
 dbus-monitor --session "interface='org.roccat.Nyth'"
 ```
+
+The bus name `org.roccat.Nyth` is shared with the (unmaintained)
+roccat-tools: if both are installed, whichever service starts first
+keeps the name and the other runs without D-Bus. The name is kept
+deliberately for compatibility with existing integrations. From 1.0
+this interface, the command lines and the config files are frozen:
+see [API stability](docs/API-STABILITY.md).
 
 ## Configuration files
 
