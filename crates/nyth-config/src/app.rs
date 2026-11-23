@@ -433,9 +433,12 @@ impl eframe::App for NythConfigApp {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
-                        egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
-                            .small()
-                            .weak(),
+                        egui::RichText::new(format!(
+                            "v{}",
+                            roccat_nyth_profile::version_with_commit()
+                        ))
+                        .small()
+                        .weak(),
                     );
                     ui.separator();
                     if ui.button("↻ Refresh").clicked() {

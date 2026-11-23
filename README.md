@@ -10,7 +10,7 @@ Ported from the original [roccat-tools](https://sourceforge.net/projects/roccat/
 ## Why NewNyth when there's roccat-tools? 
 I grew up with the Roccat Nyth and though I've tried alternatives over the years, NOTHING compares to this mouse (esp the handy fin switch and 3D printable side-buttons). I've even replaced the long-over-used switches just to keep this thing working. 
 
-So, when I moved over to Linux a few years ago, I lamented the loss of several features, like the auto-profile-switching. The roccat-tools were a life-saver for a while, but as they were built on an older stack, there began to be compatibility issues with modern Linux DEs. And so the journey began to try move things to a new GUI and Rust code (which I was learning at that time). I mainly did this for my own use, since Roccat is no more and I don't think a lot of people still use this mouse. But I decided to clean things up and relase it here for all. 
+So, when I moved over to Linux a few years ago, I lamented the loss of several features, like the auto-profile-switching. The roccat-tools were a life-saver for a while, but as they were built on an older stack, there began to be compatibility issues with modern Linux DEs. And so the journey began to try move things to a new GUI and Rust code (which I was learning at that time). I mainly did this for my own use, since Roccat is no more and I don't think a lot of people still use this mouse. But I decided to clean things up and release it here for all. 
 
 Note that because I started this for my own use, it's built for use on KDE and Wayland in Arch (mandatory "I use Arch BTW" 😉). It doesn't officially support Gnome or other DEs, nor distros. Although I don't think there's much that would prevent it working on those (other than the install method and profile auto-switch) but if there're enough requests (and I have the time) I'll be happy to adapt it. 
 
@@ -18,7 +18,7 @@ Note that because I started this for my own use, it's built for use on KDE and W
 ## Features
 
 - **Full device control:** CPI levels, polling rate, sensitivity, lighting effects and colours, button remapping, and profile switching on all 5 profiles.
-- **Configuration GUI** (`newnyth`): egui-based desktop app with 4 panels: Settings, Lighting, Buttons, Auto-switch
+- **Configuration GUI** (`newnyth`): egui-based desktop app with 5 tabs: Settings, Lighting, Buttons, Auto-switch, Advanced
 - **Profile auto-switch:** Automatically switches the mouse profile when you focus different application windows (in KDE Plasma, on Wayland)
 - **Mini switcher** (`newnyth-mini`):  a small floating window with quick profile switch buttons. Useful if you don't have KDE or Wayland or just want to manually switch profiles. 
 - **Background daemon** (`nythd`): Reads hardware events, handles media keys, launches applications from button presses, emits D-Bus signals.
@@ -177,16 +177,17 @@ newnyth-mini
 
 | Channel | Update with |
 |---------|-------------|
-| `.deb` | download + `sudo apt install ./newnyth_*_amd64.deb` (no repo yet) |
-| `.rpm` | download + `sudo dnf upgrade ./newnyth-*.x86_64.rpm` (no repo yet) |
+| `.deb` | download the new release's `.deb`, then `sudo apt install ./newnyth_*_amd64.deb` |
+| `.rpm` | download the new release's `.rpm`, then `sudo dnf upgrade ./newnyth-*.x86_64.rpm` |
 | tarball | download + re-run `./install-prebuilt.sh` |
 | Arch `makepkg` | `git pull` in the checkout, then `makepkg -si` |
 | `install.sh` | `git pull`, then `./install.sh` again |
 
 > Everything is distributed from this repository's
-> [Releases page](https://github.com/LunaBaloona/NewNyth/releases). AUR and
-> distro package repos are on hold while the project is small; track interest
-> and progress in the [issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
+> [Releases page](https://github.com/LunaBaloona/NewNyth/releases). There is no
+> apt/dnf repository or AUR package yet, so every channel above updates by
+> installing the latest release's file; if a package repository would help
+> you, say so in the [issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
 
 ## Components
 
@@ -209,7 +210,7 @@ newnyth-mini
 - **Open application** - Launch any command when the button is pressed (now stored in `~/.config/newnyth/openers.json`)
 - Plus 40+ built-in actions: scrolling, media keys, profile cycling, CPI up/down, EasyShift, EasyAim, and more
 
-**Auto-switch panel** - Yes, just like Swarm used to do on MS Windows. With NewNyth can configure up to 10 application bindings per profile. Click "Capture window" and then click any application window - its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active ~(NB this was built on KDE Plasma with Wayland. I don't expect this'll work on non-Wayland DEs).
+**Auto-switch panel** - Yes, just like Swarm used to do on MS Windows. With NewNyth can configure up to 10 application bindings per profile. Click "Capture window" and then click any application window - its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active. (Built and tested on KDE Plasma with Wayland; other Wayland compositors may work, non-Wayland sessions are not supported.)
 
 ### `nythd` - event daemon
 
@@ -253,15 +254,22 @@ nythctl --version           # Print version
 |------|------|-------------|
 | Signal | `ProfileChanged(byte)` | Emitted when the active profile changes |
 | Method | `ProfileChangedOutside(byte)` | Notify daemon of external profile change |
-| Method | `ProfileDataChangedOutside(byte)` | Tell daemon to reload profile data |
 | Method | `ConfigurationChangedOutside()` | Tell daemon to reload config files |
 | Method | `OpenGui()` | Launch the NewNyth GUI |
+| Method | `WindowActivated(string)` | Called by the KWin script when the active window changes |
 
 Monitor signals:
 
 ```bash
 dbus-monitor --session "interface='org.roccat.Nyth'"
 ```
+
+The bus name `org.roccat.Nyth` is shared with the (unmaintained)
+roccat-tools: if both are installed, whichever service starts first
+keeps the name and the other runs without D-Bus. The name is kept
+deliberately for compatibility with existing integrations. From 1.0
+this interface, the command lines and the config files are frozen:
+see [API stability](docs/API-STABILITY.md).
 
 ## Configuration files
 
@@ -271,8 +279,14 @@ All stored under `~/.config/newnyth/`:
 |------|---------|
 | `openers.json` | Commands launched by "Open application" button presses |
 | `autoswitch.json` | Profile auto-switch rules |
+| `profile_names.json` | Display names for the five profiles (typed in the GUI) |
 | `kwin_watcher.js` | KWin window tracker script (auto-generated) |
 | `active_window.txt` | Current window class (written by daemon) |
+
+Each `.json` file carries a `version` field (currently `1`); a file that
+fails to parse is copied to `<name>.bak` before NewNyth replaces it. The
+formats are part of the 1.0 stability promise
+([API stability](docs/API-STABILITY.md)).
 
 ## Architecture
 
@@ -374,7 +388,14 @@ You should see `Loaded KWin watcher script` and `KWin watcher script started`. I
 Install `playerctl`:
 
 ```bash
+# Arch
 sudo pacman -S playerctl
+
+# Debian / Ubuntu
+sudo apt install playerctl
+
+# Fedora
+sudo dnf install playerctl
 ```
 
 Check the daemon receives the event when you press a media button:

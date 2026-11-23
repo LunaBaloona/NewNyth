@@ -15,7 +15,7 @@ fn main() -> Result<(), eframe::Error> {
     for arg in args.iter().skip(1) {
         match arg.as_str() {
             "--version" | "-V" => {
-                println!("newnyth {}", env!("CARGO_PKG_VERSION"));
+                println!("newnyth {}", roccat_nyth_profile::version_with_commit());
                 return Ok(());
             }
             "--help" | "-h" => {

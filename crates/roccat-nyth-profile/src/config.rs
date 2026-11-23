@@ -1,12 +1,24 @@
 //! NewNyth configuration file management.
 //!
-//! Stores per-profile, per-button application launch commands at
-//! `~/.config/newnyth/openers.json`. This file is read by the daemon
-//! and written by the GUI.
+//! Reads and writes the JSON files under `~/.config/newnyth/`:
+//! `openers.json` (per-profile, per-button launch commands),
+//! `autoswitch.json` (window app class to profile bindings) and
+//! `profile_names.json` (display names). The daemon reads all three,
+//! the GUI and nythctl write them.
+//!
+//! Every file carries a `version` field (absent counts as 1), so a
+//! later format change can migrate old files instead of failing to
+//! parse them. Saves go through a sibling `.tmp` file and `rename`,
+//! so a crash can never leave half-written JSON for the daemon to
+//! read. A file that fails to parse is copied to `<name>.bak`
+//! before anything replaces it, so a hand-edit that broke the syntax
+//! is never lost without trace.
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 /// The config directory: `~/.config/newnyth/`
 pub fn config_dir() -> PathBuf {
@@ -19,6 +31,90 @@ pub fn config_dir() -> PathBuf {
     base.join("newnyth")
 }
 
+/// File format version written into every config file. Bump when the
+/// format changes so readers can migrate; files predating the field
+/// load as this version (the promise is documented in
+/// `docs/API-STABILITY.md`).
+pub const CONFIG_FORMAT_VERSION: u32 = 1;
+
+fn default_config_version() -> u32 {
+    CONFIG_FORMAT_VERSION
+}
+
+/// Load a config file. A missing or unreadable file yields defaults;
+/// a file that exists but will not parse is first copied to `.bak`,
+/// because callers carry on with defaults and their next save would
+/// otherwise overwrite the user's (possibly hand-edited, now broken)
+/// file without trace.
+fn load_json<T: DeserializeOwned + Default>(path: &Path, what: &str) -> T {
+    match std::fs::read_to_string(path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
+            log::warn!("Invalid {what} config at {}: {}", path.display(), e);
+            backup_corrupt(path);
+            T::default()
+        }),
+        Err(_) => T::default(),
+    }
+}
+
+/// Copy an unparseable file to `<file>.bak`. Repeated loads of the
+/// same broken file copy once only: an identical backup is skipped.
+fn backup_corrupt(path: &Path) {
+    let backup = append_suffix(path, ".bak");
+    let Ok(current) = std::fs::read(path) else {
+        return;
+    };
+    if std::fs::read(&backup).is_ok_and(|b| b == current) {
+        return;
+    }
+    match std::fs::write(&backup, &current) {
+        Ok(()) => log::warn!("Kept a copy of the unreadable file at {}", backup.display()),
+        Err(e) => log::warn!("Could not back up {}: {}", path.display(), e),
+    }
+}
+
+/// Serialise to pretty JSON and write atomically: the bytes land in a
+/// sibling `.tmp` file and are flushed to disk, then `rename` swaps
+/// them into place in one step. Readers see either the old file or
+/// the new one, never a mixture.
+fn save_json<T: Serialize>(value: &T, path: &Path) -> Result<(), String> {
+    let dir = path
+        .parent()
+        .ok_or_else(|| format!("{} has no parent directory", path.display()))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
+    let json = serde_json::to_string_pretty(value)
+        .map_err(|e| format!("JSON serialisation error: {}", e))?;
+    let tmp = append_suffix(path, ".tmp");
+    let mut file = std::fs::File::create(&tmp)
+        .map_err(|e| format!("Cannot write {}: {}", tmp.display(), e))?;
+    let written = file
+        .write_all(json.as_bytes())
+        .and_then(|()| file.sync_all());
+    drop(file);
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("Cannot write {}: {}", tmp.display(), e));
+    }
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "Cannot replace {} with {}: {}",
+            path.display(),
+            tmp.display(),
+            e
+        ));
+    }
+    Ok(())
+}
+
+/// `<path><suffix>` without touching the extension (`openers.json`
+/// becomes `openers.json.tmp`).
+fn append_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
 /// Path to the openers config file.
 pub fn openers_path() -> PathBuf {
     config_dir().join("openers.json")
@@ -26,10 +122,14 @@ pub fn openers_path() -> PathBuf {
 
 /// Map of (profile_index, button_index) >> command string.
 ///
-/// Stored as JSON: `{"0": {"8": "firefox", "12": "/usr/bin/dolphin"}, "1": {...}}`
+/// Stored as JSON: `{"version": 1, "0": {"8": "firefox", "12": "/usr/bin/dolphin"}, "1": {...}}`
 /// Profile indices are 0-based, button indices match the hardware button index.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenersConfig {
+    /// File format version; files without the field load as
+    /// [`CONFIG_FORMAT_VERSION`].
+    #[serde(default = "default_config_version")]
+    pub version: u32,
     /// Outer key: profile index as string ("0"-"4").
     /// Inner key: button index as string.
     /// Value: command to execute.
@@ -37,30 +137,25 @@ pub struct OpenersConfig {
     pub profiles: HashMap<String, HashMap<String, String>>,
 }
 
-impl OpenersConfig {
-    /// Load from disk. Returns default (empty) if file doesn't exist or is invalid.
-    pub fn load() -> Self {
-        let path = openers_path();
-        match std::fs::read_to_string(&path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
-                log::warn!("Invalid openers config at {}: {}", path.display(), e);
-                Self::default()
-            }),
-            Err(_) => Self::default(),
+impl Default for OpenersConfig {
+    fn default() -> Self {
+        Self {
+            version: CONFIG_FORMAT_VERSION,
+            profiles: HashMap::new(),
         }
     }
+}
 
-    /// Save to disk. Creates the config  directory if needed.
+impl OpenersConfig {
+    /// Load from disk. Returns default (empty) if file doesn't exist
+    /// or is invalid; an invalid file is first copied to `.bak`.
+    pub fn load() -> Self {
+        load_json(&openers_path(), "openers")
+    }
+
+    /// Save to disk atomically. Creates the config directory if needed.
     pub fn save(&self) -> Result<(), String> {
-        let dir = config_dir();
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
-
-        let path = openers_path();
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| format!("JSON serialization error: {}", e))?;
-
-        std::fs::write(&path, json).map_err(|e| format!("Cannot write {}: {}", path.display(), e))
+        save_json(self, &openers_path())
     }
 
     /// Get the command for a (profile, button) pair.
@@ -93,8 +188,12 @@ pub fn autoswitch_path() -> PathBuf {
 }
 
 /// Auto-switch configuration: maps window app classes to profiles.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutoSwitchConfig {
+    /// File format version; files without the field load as
+    /// [`CONFIG_FORMAT_VERSION`].
+    #[serde(default = "default_config_version")]
+    pub version: u32,
     /// Whether auto-switching is enabled.
     pub enabled: bool,
     /// Default profile index (0–4) when no matched app is active.
@@ -106,28 +205,27 @@ pub struct AutoSwitchConfig {
     pub profiles: HashMap<String, Vec<String>>,
 }
 
+impl Default for AutoSwitchConfig {
+    fn default() -> Self {
+        Self {
+            version: CONFIG_FORMAT_VERSION,
+            enabled: false,
+            default_profile: None,
+            profiles: HashMap::new(),
+        }
+    }
+}
+
 impl AutoSwitchConfig {
     pub fn load() -> Self {
-        let path = autoswitch_path();
-        match std::fs::read_to_string(&path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
-                log::warn!("Invalid autoswitch config at {}: {}", path.display(), e);
-                Self::default()
-            }),
-            Err(_) => Self::default(),
-        }
+        load_json(&autoswitch_path(), "autoswitch")
     }
 
     pub fn save(&self) -> Result<(), String> {
-        let dir = config_dir();
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
-        let path = autoswitch_path();
-        let json = serde_json::to_string_pretty(self).map_err(|e| format!("JSON error: {}", e))?;
-        std::fs::write(&path, json).map_err(|e| format!("Cannot write {}: {}", path.display(), e))
+        save_json(self, &autoswitch_path())
     }
 
-    /// Get the list of app classes for a profile (NB ret from v3.18sep23).
+    /// Get the list of app classes for a profile.
     pub fn apps_for_profile(&self, profile_index: u8) -> &[String] {
         self.profiles
             .get(&profile_index.to_string())
@@ -183,32 +281,33 @@ pub const MAX_PROFILE_NAME_LEN: usize = 32;
 /// The Nyth hardware has no name field, so these names live in this file
 /// only: tooltips and the auto-switch cards show them, nothing device
 /// facing depends on them.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileNames {
+    /// File format version; files without the field load as
+    /// [`CONFIG_FORMAT_VERSION`].
+    #[serde(default = "default_config_version")]
+    pub version: u32,
     /// Key: profile index as string ("0"–"4"). Value: display name.
     #[serde(default)]
     pub names: HashMap<String, String>,
 }
 
+impl Default for ProfileNames {
+    fn default() -> Self {
+        Self {
+            version: CONFIG_FORMAT_VERSION,
+            names: HashMap::new(),
+        }
+    }
+}
+
 impl ProfileNames {
     pub fn load() -> Self {
-        let path = profile_names_path();
-        match std::fs::read_to_string(&path) {
-            Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
-                log::warn!("Invalid profile-names config at {}: {}", path.display(), e);
-                Self::default()
-            }),
-            Err(_) => Self::default(),
-        }
+        load_json(&profile_names_path(), "profile-names")
     }
 
     pub fn save(&self) -> Result<(), String> {
-        let dir = config_dir();
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Cannot create {}: {}", dir.display(), e))?;
-        let path = profile_names_path();
-        let json = serde_json::to_string_pretty(self).map_err(|e| format!("JSON error: {}", e))?;
-        std::fs::write(&path, json).map_err(|e| format!("Cannot write {}: {}", path.display(), e))
+        save_json(self, &profile_names_path())
     }
 
     /// Display name for a profile, or None when unset or blank.
@@ -326,5 +425,85 @@ mod tests {
         let json = serde_json::to_string(&cfg).unwrap();
         let back: OpenersConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(back.get(4, 11), Some("dolphin"));
+    }
+
+    #[test]
+    fn legacy_files_without_version_load_as_current() {
+        let cfg: AutoSwitchConfig =
+            serde_json::from_str(r#"{"enabled": true, "default_profile": null, "profiles": {}}"#)
+                .unwrap();
+        assert_eq!(cfg.version, CONFIG_FORMAT_VERSION);
+
+        // The flattened openers map must not swallow the version key,
+        // and old files that never had one still load whole.
+        let cfg: OpenersConfig = serde_json::from_str(r#"{"0": {"8": "firefox"}}"#).unwrap();
+        assert_eq!(cfg.version, CONFIG_FORMAT_VERSION);
+        assert_eq!(cfg.get(0, 8), Some("firefox"));
+
+        let cfg: ProfileNames = serde_json::from_str(r#"{"names": {"1": "Work"}}"#).unwrap();
+        assert_eq!(cfg.version, CONFIG_FORMAT_VERSION);
+        assert_eq!(cfg.get(1), Some("Work"));
+    }
+
+    #[test]
+    fn saves_write_the_current_format_version() {
+        for json in [
+            serde_json::to_string(&OpenersConfig::default()).unwrap(),
+            serde_json::to_string(&AutoSwitchConfig::default()).unwrap(),
+            serde_json::to_string(&ProfileNames::default()).unwrap(),
+        ] {
+            let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert_eq!(value["version"], serde_json::json!(CONFIG_FORMAT_VERSION));
+        }
+    }
+
+    fn scratch_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "newnyth-config-test-{}-{}",
+            label,
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn corrupt_config_is_backed_up_before_defaulting() {
+        let dir = scratch_dir("corrupt");
+        let path = dir.join("openers.json");
+        std::fs::write(&path, "{ this is not json").unwrap();
+
+        let cfg: OpenersConfig = load_json(&path, "openers");
+        assert!(cfg.profiles.is_empty());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("openers.json.bak")).unwrap(),
+            "{ this is not json"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_swaps_atomically_and_leaves_no_temp_file() {
+        let dir = scratch_dir("atomic");
+        let path = dir.join("autoswitch.json");
+        let mut cfg = AutoSwitchConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        cfg.apps_for_profile_mut(1).push("firefox".into());
+
+        // Saving twice exercises both the fresh write and the rename
+        // over an existing file.
+        save_json(&cfg, &path).unwrap();
+        save_json(&cfg, &path).unwrap();
+
+        let back: AutoSwitchConfig =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(back.enabled);
+        assert_eq!(back.profile_for_app("firefox"), Some(1));
+        assert!(!dir.join("autoswitch.json.tmp").exists());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

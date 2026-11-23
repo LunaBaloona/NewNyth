@@ -12,7 +12,12 @@ use roccat_nyth_profile::NythDevice;
 /// mappings, lighting, firmware version, and device state.
 /// Run with no subcommand to see a full device status overview.
 #[derive(Parser)]
-#[command(name = "nythctl", version, about, long_about = None)]
+#[command(
+    name = "nythctl",
+    version = roccat_nyth_profile::version_with_commit(),
+    about,
+    long_about = None
+)]
 struct Cli {
     /// Enable verbose debug logging (set RUST_LOG=trace for maximum detail).
     #[arg(short, long, global = true)]
