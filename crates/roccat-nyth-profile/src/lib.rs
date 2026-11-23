@@ -32,6 +32,18 @@ pub use roccat_nyth_hid::protocol;
 
 pub mod config;
 
+/// Program version plus the short git commit this binary was built
+/// from, e.g. "0.9.5 #4d0e5a7". Shared by every NewNyth binary so any
+/// version display can prove which revision is actually running.
+/// Builds outside a git checkout (source tarballs) fall back to the
+/// plain package version.
+pub fn version_with_commit() -> String {
+    match option_env!("GIT_HASH") {
+        Some(hash) if !hash.is_empty() => format!("{} #{}", env!("CARGO_PKG_VERSION"), hash),
+        _ => env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
 /// Errors from profile-level operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
