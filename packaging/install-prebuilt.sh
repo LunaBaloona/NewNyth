@@ -80,10 +80,20 @@ mkdir -p ~/.config/systemd/user
 sed 's|/usr/bin/nythd|/usr/local/bin/nythd|' systemd/nythd.service > ~/.config/systemd/user/nythd.service
 systemctl --user daemon-reload
 
-# Install desktop entries
+# Install desktop entries and AppStream metadata (staged at the top
+# level of the tarball). Old unversioned entry names are removed so an
+# upgrade over a previous install does not leave a duplicate launcher.
 echo "Installing desktop entries..."
-sudo install -Dm644 newnyth.desktop      /usr/share/applications/newnyth.desktop
-sudo install -Dm644 newnyth-mini.desktop /usr/share/applications/newnyth-mini.desktop
+sudo rm -f /usr/share/applications/newnyth.desktop \
+    /usr/share/applications/newnyth-mini.desktop
+sudo install -Dm644 io.github.LunaBaloona.NewNyth.desktop \
+    /usr/share/applications/io.github.LunaBaloona.NewNyth.desktop
+sudo install -Dm644 io.github.LunaBaloona.NewNythMini.desktop \
+    /usr/share/applications/io.github.LunaBaloona.NewNythMini.desktop
+sudo install -Dm644 io.github.LunaBaloona.NewNyth.appdata.xml \
+    /usr/share/metainfo/io.github.LunaBaloona.NewNyth.appdata.xml
+sudo install -Dm644 io.github.LunaBaloona.NewNythMini.appdata.xml \
+    /usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml
 update-desktop-database /usr/share/applications 2>/dev/null || true
 
 echo ""

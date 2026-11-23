@@ -79,37 +79,20 @@ package() {
         echo "  The application will work but won't have a custom icon."
     fi
 
-    # Desktop entry — main app
-    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/newnyth.desktop" <<EOF
-[Desktop Entry]
-Name=NewNyth
-Comment=Configure your Roccat Nyth mouse
-Exec=newnyth
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;
-EOF
+    # Desktop entries and AppStream metadata. packaging/ holds the one
+    # canonical copy every packaging path installs from; the file names
+    # double as the AppStream component ids.
+    install -Dm644 "packaging/io.github.LunaBaloona.NewNyth.desktop" \
+        "${pkgdir}/usr/share/applications/io.github.LunaBaloona.NewNyth.desktop"
+    install -Dm644 "packaging/io.github.LunaBaloona.NewNythMini.desktop" \
+        "${pkgdir}/usr/share/applications/io.github.LunaBaloona.NewNythMini.desktop"
+    install -Dm644 "packaging/io.github.LunaBaloona.NewNyth.appdata.xml" \
+        "${pkgdir}/usr/share/metainfo/io.github.LunaBaloona.NewNyth.appdata.xml"
+    install -Dm644 "packaging/io.github.LunaBaloona.NewNythMini.appdata.xml" \
+        "${pkgdir}/usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml"
 
-    # Desktop entry — mini app
-    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/newnyth-mini.desktop" <<EOF
-[Desktop Entry]
-Name=NewNyth Mini
-Comment=Quick profile switcher for the Roccat Nyth mouse
-Exec=newnyth-mini
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;profile;
-EOF
-
-    # Licence
-    install -Dm644 /dev/stdin "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" <<'EOF'
-This software is licensed under the GNU General Public License v2.0 or later.
-See https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
-EOF
+    # Licence: the real file, not a stub pointing at gnu.org.
+    install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }
 
 # Install-time messages and the obsolete-rule cleanup live in

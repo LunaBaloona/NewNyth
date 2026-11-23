@@ -66,29 +66,16 @@ install -Dm644 "$SRCDIR/assets/newnyth.png" \
 install -Dm644 "$SRCDIR/LICENSE" \
     "%{buildroot}/usr/share/licenses/%{pkgname}/LICENSE"
 
-mkdir -p "%{buildroot}/usr/share/applications"
-cat > "%{buildroot}/usr/share/applications/newnyth.desktop" <<'EOF'
-[Desktop Entry]
-Name=NewNyth
-Comment=Configure your Roccat Nyth mouse
-Exec=newnyth
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;
-EOF
-cat > "%{buildroot}/usr/share/applications/newnyth-mini.desktop" <<'EOF'
-[Desktop Entry]
-Name=NewNyth Mini
-Comment=Quick profile switcher for the Roccat Nyth mouse
-Exec=newnyth-mini
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;profile;
-EOF
+# Desktop entries and AppStream metadata: packaging/ holds the one
+# canonical copy every packaging path installs from.
+install -Dm644 "$SRCDIR/packaging/io.github.LunaBaloona.NewNyth.desktop" \
+    "%{buildroot}/usr/share/applications/io.github.LunaBaloona.NewNyth.desktop"
+install -Dm644 "$SRCDIR/packaging/io.github.LunaBaloona.NewNythMini.desktop" \
+    "%{buildroot}/usr/share/applications/io.github.LunaBaloona.NewNythMini.desktop"
+install -Dm644 "$SRCDIR/packaging/io.github.LunaBaloona.NewNyth.appdata.xml" \
+    "%{buildroot}/usr/share/metainfo/io.github.LunaBaloona.NewNyth.appdata.xml"
+install -Dm644 "$SRCDIR/packaging/io.github.LunaBaloona.NewNythMini.appdata.xml" \
+    "%{buildroot}/usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml"
 
 %post
 /usr/bin/udevadm control --reload-rules 2>/dev/null || :
@@ -120,8 +107,10 @@ gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || :
 /usr/lib/udev/rules.d/70-roccat-nyth.rules
 /usr/lib/sysusers.d/roccat.conf
 /usr/lib/systemd/user/nythd.service
-/usr/share/applications/newnyth.desktop
-/usr/share/applications/newnyth-mini.desktop
+/usr/share/applications/io.github.LunaBaloona.NewNyth.desktop
+/usr/share/applications/io.github.LunaBaloona.NewNythMini.desktop
+/usr/share/metainfo/io.github.LunaBaloona.NewNyth.appdata.xml
+/usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml
 /usr/share/icons/hicolor/128x128/apps/newnyth.png
 
 %changelog

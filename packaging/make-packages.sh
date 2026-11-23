@@ -54,29 +54,13 @@ install -m644 "$SCRIPT_DIR/README-INSTALL.md"   "$STAGE/README.md"
 install -m644 "$REPO/LICENSE"                   "$STAGE/"
 install -m755 "$SCRIPT_DIR/install-prebuilt.sh" "$STAGE/"
 
-# Desktop entries — identical content to the ones install.sh writes.
-cat > "$STAGE/newnyth.desktop" <<'EOF'
-[Desktop Entry]
-Name=NewNyth
-Comment=Configure your Roccat Nyth mouse
-Exec=newnyth
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;
-EOF
-cat > "$STAGE/newnyth-mini.desktop" <<'EOF'
-[Desktop Entry]
-Name=NewNyth Mini
-Comment=Quick profile switcher for the Roccat Nyth mouse
-Exec=newnyth-mini
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;profile;
-EOF
+# Desktop entries and AppStream metadata: packaging/ holds the one
+# canonical copy every packaging path installs from; staged at the top
+# level for install-prebuilt.sh.
+install -m644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNyth.desktop"         "$STAGE/"
+install -m644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNythMini.desktop"     "$STAGE/"
+install -m644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNyth.appdata.xml"     "$STAGE/"
+install -m644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNythMini.appdata.xml" "$STAGE/"
 
 echo "==> tarball"
 tar -czf "$OUT/$NAME.tar.gz" -C "$OUT/stage" "$NAME"
@@ -89,8 +73,14 @@ done
 install -Dm644 "$REPO/udev/70-roccat-nyth.rules" "$DBASE/usr/lib/udev/rules.d/70-roccat-nyth.rules"
 install -Dm644 "$REPO/systemd/nythd.service"     "$DBASE/usr/lib/systemd/user/nythd.service"
 install -Dm644 "$REPO/assets/newnyth.png"        "$DBASE/usr/share/icons/hicolor/128x128/apps/newnyth.png"
-install -Dm644 "$STAGE/newnyth.desktop"          "$DBASE/usr/share/applications/newnyth.desktop"
-install -Dm644 "$STAGE/newnyth-mini.desktop"     "$DBASE/usr/share/applications/newnyth-mini.desktop"
+install -Dm644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNyth.desktop" \
+    "$DBASE/usr/share/applications/io.github.LunaBaloona.NewNyth.desktop"
+install -Dm644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNythMini.desktop" \
+    "$DBASE/usr/share/applications/io.github.LunaBaloona.NewNythMini.desktop"
+install -Dm644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNyth.appdata.xml" \
+    "$DBASE/usr/share/metainfo/io.github.LunaBaloona.NewNyth.appdata.xml"
+install -Dm644 "$SCRIPT_DIR/io.github.LunaBaloona.NewNythMini.appdata.xml" \
+    "$DBASE/usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml"
 install -d -m755 "$DBASE/DEBIAN"
 sed "s/^Version: .*/Version: ${VERSION}-1/" "$SCRIPT_DIR/debian/control" > "$DBASE/DEBIAN/control"
 install -m755 "$SCRIPT_DIR/debian/postinst" "$DBASE/DEBIAN/postinst"

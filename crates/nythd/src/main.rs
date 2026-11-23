@@ -40,7 +40,7 @@ fn main() {
     let show_version = args.iter().any(|a| a == "--version" || a == "-V");
 
     if show_version {
-        println!("nythd {}", env!("CARGO_PKG_VERSION"));
+        println!("nythd {}", roccat_nyth_profile::version_with_commit());
         return;
     }
 
@@ -85,7 +85,7 @@ fn main() {
 
     log::info!(
         "NewNyth daemon (nythd) {} starting",
-        env!("CARGO_PKG_VERSION")
+        roccat_nyth_profile::version_with_commit()
     );
 
     // Refuse to start a second instance. Every nythd process opens the
@@ -202,7 +202,7 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
     // Find all Nyth hidraw nodes (sorted: interface 0/mouse first).
     let all_devices = roccat_nyth_hid::device::scan_device_paths();
     if all_devices.is_empty() {
-        return Err("No Roccat Nyth devise found".into());
+        return Err("No Roccat Nyth device found".into());
     }
 
     // Open the mouse interface (first in sorted list) for ioctls.
@@ -553,9 +553,10 @@ fn handle_event(
                 subtype,
                 button_index
             );
-            // In the original, this opens a document/folder/website URL
-            // stored in profile data. The GUI tool (Phase 4) will handle
-            // configuring these paths.
+            // The original protocol can also store document, folder and
+            // website shortcuts in profile data; NewNyth neither reads
+            // nor configures those, so these events are logged and
+            // ignored.
         }
 
         NythEvent::Tcu => {
@@ -589,7 +590,9 @@ fn forward_tcu_event(dir: &std::path::Path) {
 
 /// Set up SIGINT/SIGTERM handler using a simple pipe-based approach.
 fn ctrlc_handler(running: Arc<AtomicBool>) -> Result<(), std::io::Error> {
-    // Use unsafe signal handler since we just set an atomic bool and fix usize for git build.
+    // Sound by discipline: handle_signal only stores through an atomic,
+    // which is async-signal-safe, so registering it with libc signal()
+    // is acceptable despite the unsafe call.
     unsafe {
         nix::libc::signal(nix::libc::SIGTERM, handle_signal as *const () as usize);
         nix::libc::signal(nix::libc::SIGINT, handle_signal as *const () as usize);
