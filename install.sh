@@ -74,8 +74,12 @@ if [ "$MODE" = uninstall ] || [ "$MODE" = fulluninstall ]; then
         /usr/local/bin/newnyth /usr/local/bin/newnyth-mini
 
     echo "Removing desktop entries and icon..."
-    sudo rm -f /usr/share/applications/newnyth.desktop \
+    sudo rm -f /usr/share/applications/io.github.LunaBaloona.NewNyth.desktop \
+        /usr/share/applications/io.github.LunaBaloona.NewNythMini.desktop \
+        /usr/share/applications/newnyth.desktop \
         /usr/share/applications/newnyth-mini.desktop \
+        /usr/share/metainfo/io.github.LunaBaloona.NewNyth.appdata.xml \
+        /usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml \
         /usr/share/icons/hicolor/128x128/apps/newnyth.png
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
 
@@ -195,32 +199,21 @@ mkdir -p ~/.config/systemd/user
 sed 's|/usr/bin/nythd|/usr/local/bin/nythd|' systemd/nythd.service > ~/.config/systemd/user/nythd.service
 systemctl --user daemon-reload
 
-# Install desktop entry
-# NB include remove old RustyNyth entry and icon for NewNyth
+# Install desktop entries and AppStream metadata. packaging/ holds the
+# one canonical copy every packaging path installs from. The old
+# unversioned entry names are removed here too, so an upgrade over a
+# previous install does not leave a duplicate launcher behind.
 echo "Installing desktop entries..."
-sudo install -Dm644 /dev/stdin /usr/share/applications/newnyth.desktop <<EOF
-[Desktop Entry]
-Name=NewNyth
-Comment=Configure your Roccat Nyth mouse
-Exec=newnyth
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;
-EOF
-
-sudo install -Dm644 /dev/stdin /usr/share/applications/newnyth-mini.desktop <<EOF
-[Desktop Entry]
-Name=NewNyth Mini
-Comment=Quick profile switcher for the Roccat Nyth mouse
-Exec=newnyth-mini
-Icon=newnyth
-Terminal=false
-Type=Application
-Categories=Settings;HardwareSettings;
-Keywords=mouse;roccat;nyth;gaming;profile;
-EOF
+sudo rm -f /usr/share/applications/newnyth.desktop \
+    /usr/share/applications/newnyth-mini.desktop
+sudo install -Dm644 packaging/io.github.LunaBaloona.NewNyth.desktop \
+    /usr/share/applications/io.github.LunaBaloona.NewNyth.desktop
+sudo install -Dm644 packaging/io.github.LunaBaloona.NewNythMini.desktop \
+    /usr/share/applications/io.github.LunaBaloona.NewNythMini.desktop
+sudo install -Dm644 packaging/io.github.LunaBaloona.NewNyth.appdata.xml \
+    /usr/share/metainfo/io.github.LunaBaloona.NewNyth.appdata.xml
+sudo install -Dm644 packaging/io.github.LunaBaloona.NewNythMini.appdata.xml \
+    /usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml
 
 # Finish with the daemon enabled, and running whenever this session can
 # already access the device. A freshly granted roccat group is not active

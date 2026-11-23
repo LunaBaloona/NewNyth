@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=NewNyth Mini
+Comment=Quick profile switcher for the Roccat Nyth mouse
+Exec=newnyth-mini
+Icon=newnyth
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+Keywords=mouse;roccat;nyth;gaming;profile;

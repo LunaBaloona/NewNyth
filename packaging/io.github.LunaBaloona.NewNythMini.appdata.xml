@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Canonical AppStream metadata; installed to /usr/share/metainfo/ by
+     the PKGBUILD, spec and packaging/make-packages.sh. The component id
+     matches the desktop file name shipped alongside. -->
+<component type="desktop-application">
+  <id>io.github.LunaBaloona.NewNythMini</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-or-later</project_license>
+  <name>NewNyth Mini</name>
+  <summary>Quick profile switcher for the Roccat Nyth mouse</summary>
+  <description>
+    <p>
+      A small floating window with one button per mouse profile, for
+      quick manual switching without opening the full configuration
+      GUI. Coordinates with the NewNyth daemon so the two always show
+      the same active profile.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/LunaBaloona/NewNyth</url>
+  <url type="bugtracker">https://github.com/LunaBaloona/NewNyth/issues</url>
+  <developer_name>LunaBaloona</developer_name>
+  <content_rating type="oars-1.1"/>
+</component>

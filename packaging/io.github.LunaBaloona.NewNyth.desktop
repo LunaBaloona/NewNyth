@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=NewNyth
+Comment=Configure your Roccat Nyth mouse
+Exec=newnyth
+Icon=newnyth
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+Keywords=mouse;roccat;nyth;gaming;

@@ -30,7 +30,8 @@ https://github.com/LunaBaloona/NewNyth
 | `nythctl` | CLI for scripts and automation |
 | `udev/70-roccat-nyth.rules` | Device permissions |
 | `systemd/nythd.service` | Daemon user service |
-| `newnyth.desktop`, `newnyth-mini.desktop` | Launcher entries |
+| `io.github.LunaBaloona.NewNyth*.desktop` | Launcher entries |
+| `io.github.LunaBaloona.NewNyth*.appdata.xml` | AppStream metadata |
 | `install-prebuilt.sh` | One-shot installer (uses sudo) |
 
 Licence: GPL-2.0-or-later.
