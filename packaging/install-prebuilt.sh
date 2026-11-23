@@ -38,12 +38,26 @@ sudo install -m755 newnyth       /usr/local/bin/
 sudo install -m755 newnyth-mini  /usr/local/bin/
 
 # Install udev rules
+# Packaged rules belong under /usr/lib; /etc is reserved for the admin.
 echo "Installing udev rules..."
-sudo install -Dm644 udev/90-roccat-nyth.rules /etc/udev/rules.d/90-roccat-nyth.rules
+sudo install -Dm644 udev/70-roccat-nyth.rules /usr/lib/udev/rules.d/70-roccat-nyth.rules
+if [ -e /etc/udev/rules.d/90-roccat-nyth.rules ]; then
+    echo "  Removing obsolete /etc/udev/rules.d/90-roccat-nyth.rules"
+    sudo rm -f /etc/udev/rules.d/90-roccat-nyth.rules
+fi
 
 # Create group
 echo "Setting up roccat group..."
-sudo groupadd -f roccat
+if [ -f systemd/roccat.sysusers ]; then
+    sudo install -Dm644 systemd/roccat.sysusers /usr/lib/sysusers.d/roccat.conf
+    if command -v systemd-sysusers >/dev/null 2>&1; then
+        sudo systemd-sysusers
+    else
+        sudo groupadd -f roccat
+    fi
+else
+    sudo groupadd -f roccat
+fi
 if ! id -nG "$USER" | grep -qw roccat; then
     sudo usermod -aG roccat "$USER"
     echo "  Added $USER to roccat group (log out and back in to take effect)"

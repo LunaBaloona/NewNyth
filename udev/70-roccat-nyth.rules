@@ -1,0 +1,18 @@
+# Rules for Roccat Nyth mouse.
+#
+# These rules have to be applied after 50-udev-default.rules for mode
+# changes not to be overridden, and the 70- prefix also keeps them ahead
+# of 73-seat-late.rules, which is where systemd applies TAG+="uaccess"
+# access control lists.
+# If group roccat does not exist, the group root is used.
+#
+# Packages install this file to /usr/lib/udev/rules.d/; ./install.sh does
+# the same for source installs. Do not copy rules into /etc; that
+# directory belongs to the administrator.
+#
+# ACTION!="remove" so that a plain `udevadm trigger` (which sends "change"
+# events) applies the rule to an already-plugged device.
+# The hidraw node is the only device NewNyth opens (all ioctls go through
+# it), so no /dev/input rule is needed.
+
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ACTION!="remove", ATTRS{idVendor}=="1e7d", ATTRS{idProduct}=="2e7c|2e7d", GROUP="roccat", MODE="0660", TAG+="uaccess"

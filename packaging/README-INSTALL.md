@@ -28,7 +28,7 @@ https://github.com/LunaBaloona/NewNyth
 | `newnyth-mini` | Minimal floating window for quick profile switching |
 | `nythd` | Background daemon (hardware events, D-Bus, auto-switch) |
 | `nythctl` | CLI for scripts and automation |
-| `udev/90-roccat-nyth.rules` | Device permissions |
+| `udev/70-roccat-nyth.rules` | Device permissions |
 | `systemd/nythd.service` | Daemon user service |
 | `newnyth.desktop`, `newnyth-mini.desktop` | Launcher entries |
 | `install-prebuilt.sh` | One-shot installer (uses sudo) |

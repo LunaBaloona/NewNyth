@@ -120,13 +120,16 @@ Then run the same follow-up steps as above.
 
 ```bash
 # Build tools
-sudo pacman -S rust base-devel linux-headers
+sudo pacman -S rust base-devel
 
 # GUI dependencies (egui  needs OpenGL & windowing)
 sudo pacman -S libxkbcommon wayland libx11 mesa fontconfig
 
 # D-Bus (for the daemon)
 sudo pacman -S dbus
+
+# Desktop notifications and folder buttons
+sudo pacman -S libnotify xdg-user-dirs xdg-utils
 
 # For media key support (Play/pause, volume, etc.)
 sudo pacman -S playerctl
@@ -289,9 +292,10 @@ NewNyth/
 │   ├── rpm/newnyth.spec           # RPM spec (prebuilt-binary layout)
 │   └── install-prebuilt.sh        # Installer shipped inside the release tarball
 ├── udev/
-│   └── 90-roccat-nyth.rules       # Device permissions
+│   └── 70-roccat-nyth.rules       # Device permissions
 ├── systemd/
-│   └── nythd.service              # Systemd user service
+│   ├── nythd.service              # Systemd user service
+│   └── roccat.sysusers            # roccat group definition
 ├── .github/
 │   ├── workflows/build.yml        # CI pipeline
 │   ├── workflows/release.yml      # Tag → GitHub Release (tarball + deb + rpm)

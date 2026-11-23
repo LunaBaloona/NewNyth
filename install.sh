@@ -79,9 +79,10 @@ if [ "$MODE" = uninstall ] || [ "$MODE" = fulluninstall ]; then
         /usr/share/icons/hicolor/128x128/apps/newnyth.png
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor >/dev/null 2>&1 || true
 
-    if [ -e /etc/udev/rules.d/90-roccat-nyth.rules ]; then
+    if [ -e /usr/lib/udev/rules.d/70-roccat-nyth.rules ] || [ -e /etc/udev/rules.d/90-roccat-nyth.rules ]; then
         echo "Removing udev rule..."
-        sudo rm -f /etc/udev/rules.d/90-roccat-nyth.rules
+        sudo rm -f /usr/lib/udev/rules.d/70-roccat-nyth.rules \
+            /etc/udev/rules.d/90-roccat-nyth.rules /usr/lib/sysusers.d/roccat.conf
         sudo udevadm control --reload-rules
         sudo udevadm trigger
     fi
@@ -154,13 +155,23 @@ sudo install -m755 target/release/newnyth        /usr/local/bin/
 sudo install -m755 target/release/newnyth-mini   /usr/local/bin/
 
 # Install udev rules
+# Packaged rules belong under /usr/lib; /etc is reserved for the admin.
 echo "Installing udev rules..."
-sudo install -Dm644 udev/90-roccat-nyth.rules /etc/udev/rules.d/90-roccat-nyth.rules
+sudo install -Dm644 udev/70-roccat-nyth.rules /usr/lib/udev/rules.d/70-roccat-nyth.rules
+if [ -e /etc/udev/rules.d/90-roccat-nyth.rules ]; then
+    echo "  Removing obsolete /etc/udev/rules.d/90-roccat-nyth.rules"
+    sudo rm -f /etc/udev/rules.d/90-roccat-nyth.rules
+fi
 
 # Create group
 echo "Setting up roccat group..."
 GROUP_JUST_ADDED=0
-sudo groupadd -f roccat
+sudo install -Dm644 systemd/roccat.sysusers /usr/lib/sysusers.d/roccat.conf
+if command -v systemd-sysusers >/dev/null 2>&1; then
+    sudo systemd-sysusers
+else
+    sudo groupadd -f roccat
+fi
 if ! id -nG "$USER" | grep -qw roccat; then
     sudo usermod -aG roccat "$USER"
     GROUP_JUST_ADDED=1
