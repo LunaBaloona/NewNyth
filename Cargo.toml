@@ -26,7 +26,9 @@ log = "0.4"
 env_logger = "0.11"
 nix = { version = "0.32", features = ["ioctl", "fs"] }
 bytemuck = { version = "1", features = ["derive"] }
-clap = { version = "4", features = ["derive"] }
+# The "string" feature lets clap's --version flag take a runtime-built
+# string, which we need for the git commit suffix in version_with_commit().
+clap = { version = "4", features = ["derive", "string"] }
 zbus = "5"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

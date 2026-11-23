@@ -37,7 +37,10 @@ fn main() -> Result<(), eframe::Error> {
     for arg in args.iter().skip(1) {
         match arg.as_str() {
             "--version" | "-V" => {
-                println!("newnyth-mini {}", env!("CARGO_PKG_VERSION"));
+                println!(
+                    "newnyth-mini {}",
+                    roccat_nyth_profile::version_with_commit()
+                );
                 return Ok(());
             }
             "--help" | "-h" => {
@@ -245,7 +248,7 @@ impl eframe::App for MiniApp {
 
                 ui.add_space(8.0);
                 ui.label(
-                    egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                    egui::RichText::new(format!("v{}", roccat_nyth_profile::version_with_commit()))
                         .small()
                         .weak(),
                 );

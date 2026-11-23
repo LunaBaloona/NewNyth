@@ -40,7 +40,7 @@ fn main() {
     let show_version = args.iter().any(|a| a == "--version" || a == "-V");
 
     if show_version {
-        println!("nythd {}", env!("CARGO_PKG_VERSION"));
+        println!("nythd {}", roccat_nyth_profile::version_with_commit());
         return;
     }
 
@@ -85,7 +85,7 @@ fn main() {
 
     log::info!(
         "NewNyth daemon (nythd) {} starting",
-        env!("CARGO_PKG_VERSION")
+        roccat_nyth_profile::version_with_commit()
     );
 
     // Refuse to start a second instance. Every nythd process opens the
