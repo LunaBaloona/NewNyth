@@ -1,4 +1,4 @@
-//! # NewNyth Mini compact profile switcher added in v2.16mar24
+//! # NewNyth Mini compact profile switcher
 //!
 //! Just a tiny floating window for quick profile switching, until I can get auto profile-switch working.
 
