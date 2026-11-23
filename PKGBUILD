@@ -1,7 +1,7 @@
 # Maintainer: NewNyth Contributors
 # https://github.com/LunaBaloona/NewNyth
 pkgname=newnyth
-pkgver=0.9.4
+pkgver=0.9.5
 pkgrel=1
 pkgdesc="NewNyth — Linux driver, daemon, CLI and GUI for the Roccat Nyth mouse"
 arch=('x86_64')
@@ -14,13 +14,22 @@ depends=(
     'libx11'
     'mesa'
     'fontconfig'
+    # Runtime helpers invoked by the daemon (kept in sync with
+    # packaging/debian/control and packaging/rpm/newnyth.spec):
+    'libnotify'       # notify-send, profile-change notifications
+    'xdg-user-dirs'   # xdg-user-dir, folder buttons
+    'xdg-utils'       # xdg-open, folder buttons
 )
 makedepends=(
     'rust'
     'cargo'
-    'linux-headers'
 )
-backup=('etc/udev/rules.d/90-roccat-nyth.rules')
+optdepends=(
+    'playerctl: mouse media keys (play/pause, next/previous)'
+    'libpulse: mouse volume keys via pactl'
+    'xdotool: window tracking fallback for XWayland apps'
+)
+install=newnyth.install
 
 # Build from the local directory — no source tarball needed.
 # Run makepkg from inside the newnyth project directory.
@@ -34,7 +43,7 @@ build() {
 
 check() {
     cd "$startdir"
-    cargo test --release
+    cargo test --release --locked
 }
 
 package() {
@@ -46,9 +55,13 @@ package() {
     install -Dm755 "target/release/newnyth"        "${pkgdir}/usr/bin/newnyth"
     install -Dm755 "target/release/newnyth-mini"   "${pkgdir}/usr/bin/newnyth-mini"
 
-    # udev rules
-    install -Dm644 "udev/90-roccat-nyth.rules" \
-        "${pkgdir}/etc/udev/rules.d/90-roccat-nyth.rules"
+    # udev rules (packaged rules belong under /usr/lib; /etc is for admins)
+    install -Dm644 "udev/70-roccat-nyth.rules" \
+        "${pkgdir}/usr/lib/udev/rules.d/70-roccat-nyth.rules"
+
+    # roccat group, created by systemd-sysusers via pacman's systemd hook
+    install -Dm644 "systemd/roccat.sysusers" \
+        "${pkgdir}/usr/lib/sysusers.d/roccat.conf"
 
     # systemd user service
     install -Dm644 "systemd/nythd.service" \
@@ -99,23 +112,5 @@ See https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 EOF
 }
 
-post_install() {
-    echo ">>> Creating roccat group (if it doesn't exist)..."
-    groupadd -f roccat
-    echo ">>> Reloading udev rules..."
-    udevadm control --reload-rules 2>/dev/null || true
-    udevadm trigger 2>/dev/null || true
-    echo ">>> Updating icon cache..."
-    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-    echo ""
-    echo ">>> IMPORTANT: Add your user to the roccat group:"
-    echo ">>>   sudo usermod -aG roccat \$USER"
-    echo ">>> Then log out and back in."
-    echo ""
-    echo ">>> To start the event daemon:"
-    echo ">>>   systemctl --user enable --now nythd"
-}
-
-post_upgrade() {
-    post_install
-}
+# Install-time messages and the obsolete-rule cleanup live in
+# newnyth.install (pacman only runs scriptlets from that separate file).

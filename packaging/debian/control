@@ -7,8 +7,8 @@ Maintainer: NewNyth Contributors <newnyth@lists.local>
 Homepage: https://github.com/LunaBaloona/NewNyth
 Standards-Version: 4.7.0
 Installed-Size: 24000
-Depends: libc6 (>= 2.39), libfontconfig1, libx11-6, libx11-xcb1, libxi6, libxcursor1, libxkbcommon0 (>= 1.6.0), libxkbcommon-x11-0, libwayland-client0, libwayland-egl1, libegl1, libgl1, desktop-file-utils, hicolor-icon-theme
-Recommends: playerctl, pulseaudio-utils, libgles2
+Depends: libc6 (>= 2.39), libfontconfig1, libx11-6, libx11-xcb1, libxi6, libxcursor1, libxkbcommon0 (>= 1.6.0), libxkbcommon-x11-0, libwayland-client0, libwayland-egl1, libegl1, libgl1, libnotify-bin, xdg-user-dirs, xdg-utils, desktop-file-utils, hicolor-icon-theme
+Recommends: playerctl, pulseaudio-utils, xdotool, libgles2
 Suggests: gnome-shell-extension-appindicator
 Replaces: rustynyth (<= 0.7)
 Breaks: rustynyth (<= 0.7)

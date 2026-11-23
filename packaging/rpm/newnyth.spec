@@ -23,7 +23,10 @@ BuildArch:      x86_64
 Requires:       glibc >= 2.39, fontconfig, libX11, libXi, libXcursor
 Requires:       libxkbcommon >= 1.6.0, libxkbcommon-x11
 Requires:       libwayland-client, libwayland-egl, libEGL.so.1()(64bit), libglvnd-glx
-Recommends:     playerctl, pulseaudio-utils, libdrm, mesa-filesystem
+# Runtime helpers invoked by the daemon (kept in sync with the PKGBUILD
+# and packaging/debian/control):
+Requires:       libnotify, xdg-user-dirs, xdg-utils
+Recommends:     playerctl, pulseaudio-utils, xdotool, libdrm, mesa-filesystem
 
 %description
 Modern Linux driver and configuration tools for the Roccat Nyth gaming
@@ -52,8 +55,10 @@ install -Dm755 "$BINDIR/newnyth-mini"  "%{buildroot}/usr/bin/newnyth-mini"
 install -Dm755 "$BINDIR/nythd"         "%{buildroot}/usr/bin/nythd"
 install -Dm755 "$BINDIR/nythctl"       "%{buildroot}/usr/bin/nythctl"
 
-install -Dm644 "$SRCDIR/udev/90-roccat-nyth.rules" \
-    "%{buildroot}/usr/lib/udev/rules.d/90-roccat-nyth.rules"
+install -Dm644 "$SRCDIR/udev/70-roccat-nyth.rules" \
+    "%{buildroot}/usr/lib/udev/rules.d/70-roccat-nyth.rules"
+install -Dm644 "$SRCDIR/systemd/roccat.sysusers" \
+    "%{buildroot}/usr/lib/sysusers.d/roccat.conf"
 install -Dm644 "$SRCDIR/systemd/nythd.service" \
     "%{buildroot}/usr/lib/systemd/user/nythd.service"
 install -Dm644 "$SRCDIR/assets/newnyth.png" \
@@ -112,7 +117,8 @@ gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || :
 /usr/bin/newnyth-mini
 /usr/bin/nythd
 /usr/bin/nythctl
-/usr/lib/udev/rules.d/90-roccat-nyth.rules
+/usr/lib/udev/rules.d/70-roccat-nyth.rules
+/usr/lib/sysusers.d/roccat.conf
 /usr/lib/systemd/user/nythd.service
 /usr/share/applications/newnyth.desktop
 /usr/share/applications/newnyth-mini.desktop
