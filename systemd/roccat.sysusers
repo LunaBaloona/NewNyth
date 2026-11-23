@@ -1,0 +1,6 @@
+# Creates the roccat group so the udev rule has a valid target on fresh
+# installs, replacing the groupadd scriptlets that previously had to be
+# run by hand. Packages install this to /usr/lib/sysusers.d/roccat.conf;
+# systemd-sysusers (run automatically by the package manager's install
+# hooks, or by ./install.sh) materialises the group.
+g roccat -

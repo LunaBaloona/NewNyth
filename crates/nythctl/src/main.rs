@@ -178,7 +178,8 @@ fn cmd_detect() -> Result<(), roccat_nyth_profile::Error> {
         println!("Troubleshooting:");
         println!("  1. Is the mouse plugged in?");
         println!("  2. Are the udev rules installed?");
-        println!("     sudo cp udev/90-roccat-nyth.rules /etc/udev/rules.d/");
+        println!("     /usr/lib/udev/rules.d/70-roccat-nyth.rules should exist;");
+        println!("     run ./install.sh from the source tree if it does not.");
         println!("     sudo udevadm control --reload-rules && sudo udevadm trigger");
         println!("  3. Is your user in the 'roccat' group?");
         println!("     sudo usermod -aG roccat $USER");

@@ -1,0 +1,43 @@
+# pacman scriptlets for the newnyth package.
+#
+# The roccat group and the udev rule need no work here: the package ships
+# /usr/lib/sysusers.d/roccat.conf and /usr/lib/udev/rules.d/70-roccat-nyth.rules,
+# and systemd's pacman hooks run systemd-sysusers and reload udev for us.
+# The udevadm calls below are belt-and-braces for setups where those hooks
+# have been masked.
+
+post_install() {
+    echo ">>> Reloading udev rules..."
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+    echo ">>> Updating icon cache..."
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+    echo ""
+    echo ">>> IMPORTANT: Add your user to the roccat group:"
+    echo ">>>   sudo usermod -aG roccat \$USER"
+    echo ">>> Then log out and back in."
+    echo ">>> (Sessions managed by systemd-logind get access through the rule's"
+    echo ">>> TAG+=\"uaccess\" without group membership.)"
+    echo ""
+    echo ">>> To start the event daemon:"
+    echo ">>>   systemctl --user enable --now nythd"
+}
+
+post_upgrade() {
+    # Older releases shipped the rule as a backup-kept /etc file with a
+    # later sort order; remove leftovers so only the packaged /usr/lib
+    # rule applies.
+    if [ -e /etc/udev/rules.d/90-roccat-nyth.rules ]; then
+        echo ">>> Removing obsolete /etc/udev/rules.d/90-roccat-nyth.rules..."
+        rm -f /etc/udev/rules.d/90-roccat-nyth.rules
+    fi
+    post_install
+}
+
+post_remove() {
+    echo ">>> Reloading udev rules..."
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+    echo ">>> Updating icon cache..."
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+}
