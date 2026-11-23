@@ -59,6 +59,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 /// Provides safe methods for reading and writing profiles, settings,
 /// button mappings, macros, lighting, and device state.
+///
+/// Every operation takes the exclusive device lock from
+/// [`roccat_nyth_hid::hidraw`], so select+read and write+verify
+/// sequences never interleave with another NewNyth process driving the
+/// same mouse. Reads of select-armed reports also verify the echoed
+/// `profile_index`, rejecting replies that belong to a different slot.
 pub struct NythDevice {
     dev: HidrawDevice,
     info: NythDeviceInfo,
@@ -80,6 +86,7 @@ impl NythDevice {
 
     /// Read the active profile index (0–4).
     pub fn read_active_profile(&self) -> Result<u8> {
+        let _guard = self.dev.lock()?;
         let report: ProfileReport = hidraw::read_struct(&self.dev, ReportId::Profile)?;
         Ok(report.index)
     }
@@ -87,6 +94,7 @@ impl NythDevice {
     /// Set the active profile (0–4).
     pub fn write_active_profile(&self, index: u8) -> Result<()> {
         self.validate_profile_index(index)?;
+        let _guard = self.dev.lock()?;
         let report = ProfileReport::new(index, NYTH_PROFILE_NUM);
         hidraw::write_struct(&self.dev, &report)?;
         Ok(())
@@ -97,8 +105,11 @@ impl NythDevice {
     /// Read settings for a profile (CPI, sensitivity, polling, lighting).
     ///
     /// This sends a select command first, then reads the settings report.
+    /// The lock is held across select+read so a concurrent process cannot
+    /// re-point the read at another profile's data.
     pub fn read_profile_settings(&self, profile_index: u8) -> Result<ProfileSettings> {
         self.validate_profile_index(profile_index)?;
+        let _guard = self.dev.lock()?;
 
         // Select the profile's settings data.
         hidraw::select(
@@ -109,6 +120,13 @@ impl NythDevice {
         )?;
 
         let settings: ProfileSettings = hidraw::read_struct(&self.dev, ReportId::ProfileSettings)?;
+
+        // The device echoes the profile index inside the report (it is part
+        // of the checksummed payload). A mismatch means the selection was
+        // changed between select and read by a tool that does not honour
+        // the lock, so the bytes are for the wrong profile: reject them
+        // rather than edit one profile while displaying another.
+        check_profile_index(profile_index, settings.profile_index)?;
 
         if !settings.validate_checksum() {
             log::warn!(
@@ -131,6 +149,7 @@ impl NythDevice {
         settings: &mut ProfileSettings,
     ) -> Result<()> {
         self.validate_profile_index(profile_index)?;
+        let _guard = self.dev.lock()?;
         settings.finalize(profile_index);
         hidraw::write_struct(&self.dev, settings)?;
         Ok(())
@@ -141,6 +160,7 @@ impl NythDevice {
     /// Read button mappings for a profile.
     pub fn read_profile_buttons(&self, profile_index: u8) -> Result<ProfileButtons> {
         self.validate_profile_index(profile_index)?;
+        let _guard = self.dev.lock()?;
 
         hidraw::select(
             &self.dev,
@@ -150,6 +170,7 @@ impl NythDevice {
         )?;
 
         let buttons: ProfileButtons = hidraw::read_struct(&self.dev, ReportId::ProfileButtons)?;
+        check_profile_index(profile_index, buttons.profile_index)?;
         Ok(buttons)
     }
 
@@ -160,6 +181,7 @@ impl NythDevice {
         buttons: &mut ProfileButtons,
     ) -> Result<()> {
         self.validate_profile_index(profile_index)?;
+        let _guard = self.dev.lock()?;
         buttons.finalize(profile_index);
         hidraw::write_struct(&self.dev, buttons)?;
         Ok(())
@@ -169,12 +191,14 @@ impl NythDevice {
 
     /// Read the firmware version as a formatted string (e.g. "1.10").
     pub fn read_firmware_version(&self) -> Result<String> {
+        let _guard = self.dev.lock()?;
         let info: InfoReport = hidraw::read_struct(&self.dev, ReportId::Info)?;
         Ok(info.firmware_version_string())
     }
 
     /// Reset the device to factory defaults.
     pub fn reset_to_defaults(&self) -> Result<()> {
+        let _guard = self.dev.lock()?;
         let info = InfoReport {
             report_id: ReportId::Info as u8,
             size: InfoReport::SIZE as u8,
@@ -192,6 +216,7 @@ impl NythDevice {
     /// Enable driver-managed mode (device sends special events to the
     /// driver instead of emitting HID multimedia keycodes directly).
     pub fn enable_driver_mode(&self) -> Result<()> {
+        let _guard = self.dev.lock()?;
         let report = DeviceStateReport::new(DeviceStateReport::STATE_ON);
         hidraw::write_struct(&self.dev, &report)?;
         Ok(())
@@ -199,6 +224,7 @@ impl NythDevice {
 
     /// Disable driver-managed mode (device emits HID keycodes directly).
     pub fn disable_driver_mode(&self) -> Result<()> {
+        let _guard = self.dev.lock()?;
         let report = DeviceStateReport::new(DeviceStateReport::STATE_OFF);
         hidraw::write_struct(&self.dev, &report)?;
         Ok(())
@@ -208,6 +234,7 @@ impl NythDevice {
 
     /// Read the current tracking/distance control unit state.
     pub fn read_control_unit(&self) -> Result<ControlUnitReport> {
+        let _guard = self.dev.lock()?;
         let report: ControlUnitReport = hidraw::read_struct(&self.dev, ReportId::ControlUnit)?;
         Ok(report)
     }
@@ -219,6 +246,7 @@ impl NythDevice {
     /// tracking unit stays untouched, mirroring the original driver's
     /// `nyth_distance_control_unit_set()`.
     pub fn write_distance_control(&self, dcu: DistanceControl) -> Result<()> {
+        let _guard = self.dev.lock()?;
         let report = ControlUnitReport::new(
             dcu as u8,
             ControlUnitReport::UNCHANGED,
@@ -234,6 +262,7 @@ impl NythDevice {
     /// Mirrors the original driver's `nyth_tracking_control_unit()` in
     /// `nyth_control_unit.c`.
     fn write_tracking_control(&self, tcu: u8, action: TcuAction) -> Result<()> {
+        let _guard = self.dev.lock()?;
         let report = ControlUnitReport::new(ControlUnitReport::UNCHANGED, tcu, action as u8);
         hidraw::write_struct(&self.dev, &report)?;
         Ok(())
@@ -274,6 +303,7 @@ impl NythDevice {
     /// Read the button set preset for a profile.
     pub fn read_button_set(&self, profile_index: u8) -> Result<ButtonSet> {
         self.validate_profile_index(profile_index)?;
+        let _guard = self.dev.lock()?;
 
         hidraw::select(
             &self.dev,
@@ -283,6 +313,7 @@ impl NythDevice {
         )?;
 
         let button_set: ButtonSet = hidraw::read_struct(&self.dev, ReportId::ButtonSet)?;
+        check_profile_index(profile_index, button_set.profile_index)?;
         Ok(button_set)
     }
 
@@ -296,11 +327,62 @@ impl NythDevice {
     }
 }
 
+/// Reject a device reply whose echoed `profile_index` does not match
+/// what was requested.
+///
+/// A Nyth `select` arms exactly one report for the next read. If the
+/// reply names a different slot, something that did not take the
+/// device lock changed the selection mid-sequence, so the bytes belong
+/// to another profile. Failing loudly beats silently editing the wrong
+/// profile.
+fn check_profile_index(expected: u8, actual: u8) -> Result<()> {
+    if actual != expected {
+        log::error!(
+            "Device reply for profile {} carried index {} (selection race?)",
+            expected,
+            actual
+        );
+        return Err(Error::Hid(roccat_nyth_hid::error::Error::ProfileMismatch {
+            expected,
+            got: actual,
+        }));
+    }
+    Ok(())
+}
+
 impl std::fmt::Debug for NythDevice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NythDevice")
             .field("path", &self.info.hidraw_path)
             .field("name", &self.info.name)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn matching_echoed_profile_index_accepted() {
+        assert!(check_profile_index(2, 2).is_ok());
+    }
+
+    #[test]
+    fn mismatched_echoed_profile_index_rejected() {
+        // Simulates losing the device selection to another process: the
+        // reply bytes are profile 3's although profile 1 was requested.
+        let err = check_profile_index(1, 3).unwrap_err();
+        assert!(matches!(
+            err,
+            Error::Hid(roccat_nyth_hid::error::Error::ProfileMismatch {
+                expected: 1,
+                got: 3
+            })
+        ));
+        // Both indices appear in the message so journals name the race.
+        let msg = err.to_string();
+        assert!(msg.contains("3"), "{msg}");
+        assert!(msg.contains("1"), "{msg}");
     }
 }
