@@ -225,7 +225,7 @@ impl AutoSwitchConfig {
         save_json(self, &autoswitch_path())
     }
 
-    /// Get the list of app classes for a profile (NB ret from v3.18sep23).
+    /// Get the list of app classes for a profile.
     pub fn apps_for_profile(&self, profile_index: u8) -> &[String] {
         self.profiles
             .get(&profile_index.to_string())

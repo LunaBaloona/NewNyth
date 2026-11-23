@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.9.5"
 edition = "2024"
-# image 0.25 requires 1.88; clap 4.6 requires 1.85.
+# eframe/egui 0.37 is what forces this MSRV (its own rust-version is 1.95).
 rust-version = "1.95"
 license = "GPL-2.0-or-later"
 # Note: cargo 1.100 warns about unused `workspace.package` fields. Only the

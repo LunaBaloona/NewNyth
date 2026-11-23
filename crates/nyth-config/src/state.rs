@@ -391,7 +391,7 @@ pub const ASSIGNABLE_BUTTON_TYPES: &[(u8, &str)] = &[
 // ──── HID Usage ID keycode table ────────────────────────────────────
 //
 // Standard USB HID keyboard usage IDs. The mouse stores these in the
-// Button.key field when the type is Shortcut (0x05). (NB remember re-enable extended F-keys)
+// Button.key field when the type is Shortcut (0x05).
 
 pub const HID_KEYS: &[(u8, &str)] = &[
     (0x00, "(none)"),
