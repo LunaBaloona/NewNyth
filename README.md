@@ -291,6 +291,7 @@ All stored under `~/.config/newnyth/`:
 | `openers.json` | Commands launched by "Open application" button presses |
 | `autoswitch.json` | Profile auto-switch rules |
 | `profile_names.json` | Display names for the five profiles (typed in the GUI) |
+| `settings.json` | App preferences (desktop notifications switch) |
 | `kwin_watcher.js` | KWin window tracker script (auto-generated) |
 | `active_window.txt` | Current window class (written by daemon) |
 

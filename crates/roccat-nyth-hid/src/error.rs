@@ -19,6 +19,9 @@ pub enum Error {
     #[error("Device returned error status: {0}")]
     DeviceStatus(ControlStatus),
 
+    #[error("Device control register still busy after {waited_ms} ms of waiting")]
+    BusyTimeout { waited_ms: u64 },
+
     #[error("Failed to acquire device lock on {path}: {source}")]
     Lock { path: String, source: nix::Error },
 

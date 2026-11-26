@@ -227,6 +227,20 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
     // Start D-Bus server (optional — daemon still works without it).
     let dbus = NythDbusServer::new(active_profile + 1);
 
+    // Load app-level settings and honour the desktop notification
+    // switch before any popup is attempted (the connect notice below
+    // respects it too).
+    let mut app_settings = roccat_nyth_profile::config::AppSettings::load();
+    events::set_notifications_enabled(app_settings.notifications);
+    log::info!(
+        "Desktop notifications: {}",
+        if app_settings.notifications {
+            "on"
+        } else {
+            "off"
+        }
+    );
+
     // Start event readers on ALL Nyth hidraw nodes.
     // The device may send special events on either interface, and
     // which node is "correct" varies between kernel versions and
@@ -289,7 +303,12 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
     // without a session bus). Polling mtimes every loop iteration is cheap.
     let openers_path = roccat_nyth_profile::config::openers_path();
     let autoswitch_path = roccat_nyth_profile::config::autoswitch_path();
-    let mut config_stamp = (file_mtime(&openers_path), file_mtime(&autoswitch_path));
+    let settings_path = roccat_nyth_profile::config::settings_path();
+    let mut config_stamp = (
+        file_mtime(&openers_path),
+        file_mtime(&autoswitch_path),
+        file_mtime(&settings_path),
+    );
 
     // Install KWin watcher script (retries in background if KWin isn't ready yet).
     window_watcher::start_kwin_installer();
@@ -319,6 +338,8 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
             if state.config_reload_requested {
                 openers = roccat_nyth_profile::config::OpenersConfig::load();
                 autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
+                app_settings = roccat_nyth_profile::config::AppSettings::load();
+                events::set_notifications_enabled(app_settings.notifications);
                 log::info!(
                     "Reloaded configs (auto-switch: {})",
                     if autoswitch.enabled {
@@ -339,11 +360,17 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
         // Config file watch (belt and braces alongside the D-Bus nudge):
         // reload whenever a config file was written — by the GUI, a second
         // instance, or a text editor.
-        let stamp = (file_mtime(&openers_path), file_mtime(&autoswitch_path));
+        let stamp = (
+            file_mtime(&openers_path),
+            file_mtime(&autoswitch_path),
+            file_mtime(&settings_path),
+        );
         if stamp != config_stamp {
             config_stamp = stamp;
             openers = roccat_nyth_profile::config::OpenersConfig::load();
             autoswitch = roccat_nyth_profile::config::AutoSwitchConfig::load();
+            app_settings = roccat_nyth_profile::config::AppSettings::load();
+            events::set_notifications_enabled(app_settings.notifications);
             log::info!(
                 "Config files changed - reloaded (auto-switch: {})",
                 if autoswitch.enabled {
@@ -358,8 +385,12 @@ fn run_device_session(running: &Arc<AtomicBool>) -> Result<(), Box<dyn std::erro
         while let Ok(app_class) = window_rx.try_recv() {
             // Check if the GUI requested a capture.
             if capture_request_path.exists() {
-                // Don't capture our own window.
-                if app_class != "newnyth" && app_class != "nyth-config" {
+                // Don't capture our own windows: the GUI reports
+                // "newnyth", the Mini switcher "newnyth-mini". (The
+                // old "nyth-config" entry never matched any window;
+                // the Mini was missing, so Capture could bind our own
+                // switcher as if it were an application.)
+                if app_class != "newnyth" && app_class != "newnyth-mini" {
                     log::info!("Captured app class: {}", app_class);
                     let _ = std::fs::create_dir_all(roccat_nyth_profile::config::config_dir());
                     let _ = std::fs::write(&capture_result_path, &app_class);
@@ -488,8 +519,11 @@ fn handle_event(
 
         NythEvent::OpenDriver => {
             log::info!("Open driver/config requested");
-            let _ =
-                events::launch_app("newnyth", &[]).or_else(|_| events::launch_app("nythctl", &[]));
+            // No nythctl fallback: run with no arguments it only prints
+            // help, which nobody asked for. Warn honestly instead.
+            if let Err(e) = events::launch_app("newnyth", &[]) {
+                log::warn!("Could not open the NewNyth GUI: {e}");
+            }
         }
 
         NythEvent::OpenApplication { button_index } => {

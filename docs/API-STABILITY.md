@@ -50,7 +50,8 @@ listed in the changelog with migration notes.
 ## Config files
 
 - Location: `$XDG_CONFIG_HOME/newnyth/` (default `~/.config/newnyth/`).
-- Files: `openers.json`, `autoswitch.json`, `profile_names.json`.
+- Files: `openers.json`, `autoswitch.json`, `profile_names.json` and
+  `settings.json`.
 - Every file carries a `"version"` field. A file without the field is
   read as version `1`. Readers must ignore fields they do not know
   (NewNyth itself does), so hand-added keys survive round trips only
