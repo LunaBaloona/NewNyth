@@ -97,11 +97,24 @@ sudo install -Dm644 io.github.LunaBaloona.NewNythMini.appdata.xml \
     /usr/share/metainfo/io.github.LunaBaloona.NewNythMini.appdata.xml
 update-desktop-database /usr/share/applications 2>/dev/null || true
 
+# An upgrade over a running daemon must hand over to the new binaries:
+# `enable --now` never touches an active service, so restart it here
+# instead of leaving the old process serving until the next login.
+DAEMON_RESTARTED=0
+if systemctl --user is-active --quiet nythd 2>/dev/null; then
+    echo "Restarting the running daemon so the new version takes over..."
+    systemctl --user restart nythd 2>/dev/null && DAEMON_RESTARTED=1
+fi
+
 echo ""
 echo "=== NewNyth installation complete ==="
 echo ""
-echo "To start the background daemon:"
-echo "  systemctl --user enable --now nythd"
+if [ "$DAEMON_RESTARTED" = 1 ]; then
+    echo "The previously running daemon was restarted onto the new version."
+else
+    echo "To start the background daemon:"
+    echo "  systemctl --user enable --now nythd"
+fi
 echo ""
 echo "To launch the GUI:"
 echo "  newnyth"
