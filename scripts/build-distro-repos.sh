@@ -6,7 +6,7 @@
 # usage: scripts/build-distro-repos.sh <packages-dir> <pages-dir>
 #
 #   packages-dir  input directory holding release assets: files named
-#                 newnyth_<v>-1_amd64.deb and newnyth-<v>-1.fc-style.x86_64.rpm
+#                 newnyth_<v>-1_amd64.deb and newnyth-<v>-1.x86_64.rpm
 #                 for one or more releases (all published releases at once;
 #                 both repository formats are rebuilt from scratch).
 #   pages-dir     output directory for the pages tree. Any existing apt/
