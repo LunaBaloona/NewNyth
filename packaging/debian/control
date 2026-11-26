@@ -1,9 +1,9 @@
 Package: newnyth
-Version: 0.9.2-1
+Version: 0.9.5-1
 Section: utils
 Priority: optional
 Architecture: amd64
-Maintainer: NewNyth Contributors <newnyth@lists.local>
+Maintainer: NewNyth Contributors <omeganetie+github@gmail.com>
 Homepage: https://github.com/LunaBaloona/NewNyth
 Standards-Version: 4.7.0
 Installed-Size: 24000

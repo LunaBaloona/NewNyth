@@ -22,11 +22,22 @@ as usual.
    cargo test --release --locked --workspace
    ```
 
-3. Hardware smoke test on a real Nyth (`./install.sh` from `main`):
-   connect, switch profiles, trigger an auto-switch to a bound app,
-   apply a profile, change DPI, run the TCU wizard once, open the Mini
-   window. For a feature release, walk the matching test checklist
-   instead.
+3. Hardware smoke test on a real Nyth (`./install.sh` from `main`).
+   Walk the concurrency matrix first - one row per scenario (adopted
+   after the 2026-11 review round):
+
+   | # | Scenario | Expect |
+   |---|----------|--------|
+   | 1 | GUI open while the daemon runs | both talk to the device with no lock timeouts; a profile switched elsewhere shows up in the GUI |
+   | 2 | `nythctl profile set N` while auto-switch is armed | the switch lands, the daemon follows it (notification, no fight with the rules) |
+   | 3 | unplug the mouse mid-write (apply a profile, yank the cable) | the writer errors out cleanly, the daemon survives, replugging restores service |
+   | 4 | replug while the daemon runs | the device is found again without restarting `nythd` |
+   | 5 | edit a config JSON while everything runs | the daemon picks it up (`ConfigurationChangedOutside`); a GUI save still round-trips |
+
+   Then the standing checks: connect, switch all five profiles, trigger
+   an auto-switch to a bound app, apply a profile, change DPI, run the
+   TCU wizard once, open the Mini window. For a feature release, walk
+   the matching test checklist instead.
 
 ## 1. Version bump (one commit)
 
@@ -77,7 +88,7 @@ with these assets:
 
 - `newnyth-X.Y.Z-x86_64-linux.tar.gz` (with `install-prebuilt.sh`)
 - `newnyth_X.Y.Z-1_amd64.deb` (Debian 13 / Ubuntu 24.04 and newer)
-- `newnyth-X.Y.Z-1.fc-style.x86_64.rpm` (Fedora / RHEL / openSUSE)
+- `newnyth-X.Y.Z-1.x86_64.rpm` (Fedora / RHEL / openSUSE)
 - `SHA256SUMS.txt`
 
 ## 4. Publish the release

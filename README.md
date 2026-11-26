@@ -22,7 +22,7 @@ Note that because I started this for my own use, it's built for use on KDE and W
 - **Profile auto-switch:** Automatically switches the mouse profile when you focus different application windows (in KDE Plasma, on Wayland)
 - **Mini switcher** (`newnyth-mini`):  a small floating window with quick profile switch buttons. Useful if you don't have KDE or Wayland or just want to manually switch profiles. 
 - **Background daemon** (`nythd`): Reads hardware events, handles media keys, launches applications from button presses, emits D-Bus signals.
-- **CLI tool** (`nythctl`): headless control for scripts and automations.
+- **CLI tool** (`nythctl`): device status, profile switching and driver-mode control for scripts and automations. Writing settings (CPI, lighting, buttons) is GUI-only for now.
 - **Systemd user service**: Starts automatically on login
 
 ## Supported hardware:
@@ -63,7 +63,11 @@ Note that because I started this for my own use, it's built for use on KDE and W
 
 Pick whatever matches your distro - everything ships the same four programs
 and sets up the udev rule, `roccat` group, systemd user service and launcher
-entries.
+entries. The `.deb` and `.rpm` are built for Debian/Ubuntu and
+Fedora/RHEL/openSUSE respectively; the one environment that is maintained
+and tested end-to-end is Arch Linux with KDE Plasma on Wayland, so other
+distros are expected to work but count as best-effort - please report
+anything odd you hit there.
 
 ### Prebuilt binaries (any x86_64 distro with glibc ≥ 2.39)
 
@@ -87,7 +91,10 @@ cd newnyth-*-x86_64-linux
 Then, whichever route you used:
 
 ```bash
-sudo usermod -aG roccat $USER   # log out and back in afterwards
+# A desktop (logind-managed) session already gets device access through
+# the udev rule's uaccess tag. Only a raw TTY or SSH session needs the
+# roccat group as well:
+sudo usermod -aG roccat $USER   # optional; log out and back in if used
 systemctl --user enable --now nythd
 newnyth
 ```
@@ -134,10 +141,10 @@ sudo pacman -S libnotify xdg-user-dirs xdg-utils
 # For media key support (Play/pause, volume, etc.)
 sudo pacman -S playerctl
 
-# Device permissions group
+# Device permissions group (desktop logins get access via uaccess;
+# the group is the fallback for TTY/SSH sessions)
 sudo groupadd -f roccat
-sudo usermod -aG roccat $USER
-# Log out and back in for group membership to take effect
+sudo usermod -aG roccat $USER   # optional; log out and back in if used
 ```
 
 #### Next, build and install
@@ -179,15 +186,19 @@ newnyth-mini
 |---------|-------------|
 | `.deb` | download the new release's `.deb`, then `sudo apt install ./newnyth_*_amd64.deb` |
 | `.rpm` | download the new release's `.rpm`, then `sudo dnf upgrade ./newnyth-*.x86_64.rpm` |
+| apt repo | `sudo apt update && sudo apt upgrade newnyth` |
+| dnf repo | `sudo dnf upgrade newnyth` |
 | tarball | download + re-run `./install-prebuilt.sh` |
 | Arch `makepkg` | `git pull` in the checkout, then `makepkg -si` |
 | `install.sh` | `git pull`, then `./install.sh` again |
 
 > Everything is distributed from this repository's
-> [Releases page](https://github.com/LunaBaloona/NewNyth/releases). There is no
-> apt/dnf repository or AUR package yet, so every channel above updates by
-> installing the latest release's file; if a package repository would help
-> you, say so in the [issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
+> [Releases page](https://github.com/LunaBaloona/NewNyth/releases). The
+> [apt and dnf repositories](#package-repositories-apt--dnf) mirror every
+> published release, so those two channels upgrade in place; there is no
+> AUR package, so the Arch channels update by rebuilding from the checkout.
+> If a different package channel would help you, say so in the
+> [issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
 
 ## Components
 
@@ -202,7 +213,7 @@ newnyth-mini
 
 **Settings panel** - CPI levels 1–5 (200–12,000 DPI, with individual enable toggles and active-level selector), polling rates (125/250/500/1000 Hz), and of course sensitivity (with optional independent X/Y axes).
 
-**Lighting panel** - On/Off toggle, custom colour pickers for both light zones (logo and bottom), light effects (fully lit, blinking, breathing, heartbeat) with speed control, and colour effects (off, simultaneously, up, down). (May need a bit more work, but who uses RGB anymore)
+**Lighting panel** - On/Off toggle, custom colour pickers for both light zones (logo and bottom), light effects (fully lit, blinking, breathing, heartbeat) with speed control, and colour effects (off, simultaneously, up, down). Everything on this panel is written straight to the device and stays with the profile; the Nyth offers exactly this fixed set of effects, not arbitrary animation, so the panel has no more to give. The colour-effect directions are the least-exercised corner: if one looks wrong on your unit, please report it. (But who uses RGB anymore)
 
 **Buttons panel** - Remap all 40 buttons (20 standard + 20 EasyShift layer). Side-by-side columns for easy comparison, grouped by main buttons (left, right, middle, wheel up/down, top, fin left/right) and side buttons (Side 1–12 with separators every 4 buttons). Select a button to configure:
 
@@ -210,7 +221,7 @@ newnyth-mini
 - **Open application** - Launch any command when the button is pressed (now stored in `~/.config/newnyth/openers.json`)
 - Plus 40+ built-in actions: scrolling, media keys, profile cycling, CPI up/down, EasyShift, EasyAim, and more
 
-**Auto-switch panel** - Yes, just like Swarm used to do on MS Windows. With NewNyth can configure up to 10 application bindings per profile. Click "Capture window" and then click any application window - its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active. (Built and tested on KDE Plasma with Wayland; other Wayland compositors may work, non-Wayland sessions are not supported.)
+**Auto-switch panel** - Yes, just like Swarm used to do on MS Windows. With NewNyth can configure up to 10 application bindings per profile. Click "Capture window" and then click any application window - its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active. (Requires KDE Plasma on Wayland: the tracker drives KWin's scripting API, so other compositors and X11 are not supported. Outside KDE use the Mini switcher to change profiles by hand.)
 
 ### `nythd` - event daemon
 
@@ -348,11 +359,33 @@ The binaries will be at `target/release/`. Minimum Rust version: **1.95** (requi
 
 ### Contributing
 
-Pull requests welcome. Please:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full dev setup, the exact
+gates CI runs and how to report hardware issues usefully. Short version:
+run `cargo fmt --all` before committing, make sure `cargo test` and
+`cargo clippy` pass, and open an issue first for large changes so we can
+go over the approach.
 
-1. Run `cargo fmt --all` before committing
-2. Make sure `cargo test` and `cargo clippy` pass
-3. Open an issue first for large changes so we can go over the approach.
+## Known limitations
+
+An honest list of what NewNyth does not do yet, so nothing below comes as
+a surprise:
+
+- **"Open application" commands are split on whitespace.** Quoted
+  arguments (a path with a space in it, say) do not survive yet.
+  Workaround: point the button at a small wrapper script.
+- **Macro and button-set data is preserved, not edited.** Those device
+  blobs are read and rewritten untouched when profiles change, but there
+  is no macro editor in the GUI.
+- **Timer and document buttons are ignored.** The mouse's timer
+  start/stop and document keys are decoded by the daemon and logged,
+  but nothing acts on them yet.
+- **Auto-switch is KDE Plasma (KWin) only**, by design (see the
+  Auto-switch panel above). Elsewhere, use the Mini switcher.
+- **`nythctl` is read-and-switch only**: it can show status and switch
+  profiles, not write CPI/lighting/button changes.
+
+If one of these blocks you, say so in the
+[issue tracker](https://github.com/LunaBaloona/NewNyth/issues).
 
 ## Troubleshooting
 
@@ -366,12 +399,24 @@ lsusb | grep 1e7d
 ls -la /dev/hidraw*
 # Files should be owned by root:roccat
 
-# Check you're in the roccat group
-groups $USER | grep roccat
+# A desktop (logind) session gets access through the rule's uaccess
+# tag; the node's ACL should list your user:
+getfacl /dev/hidraw*
 
-# If not, add yourself and reboot or just log out / back in
+# From a TTY or over SSH you need the roccat group instead. Check and,
+# if missing, add yourself (log out and back in afterwards):
+groups $USER | grep roccat
 sudo usermod -aG roccat $USER
 ```
+
+### Do not run roccat-tools alongside NewNyth
+
+NewNyth shares the D-Bus name `org.roccat.Nyth` with the unmaintained
+roccat-tools: if both are installed, whichever daemon starts first keeps
+the name and the other runs without D-Bus. Worse, roccat-tools' own
+utilities do not respect NewNyth's device lock and can interrupt a write
+mid-flight. Remove roccat-tools before installing NewNyth; everything the
+Nyth needs is here.
 
 ### Auto-switch not working
 
