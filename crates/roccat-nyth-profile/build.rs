@@ -13,11 +13,22 @@ fn main() {
     watch_git_head();
 }
 
-/// `git rev-parse --short HEAD`, empty when git is unavailable or the
-/// build tree is not a checkout.
+/// `git describe --always --abbrev=7 --dirty` with all tags excluded,
+/// so the output is the 7-character commit hash - plus a `-dirty`
+/// suffix when the tree carries uncommitted changes - and never a tag
+/// decoration. A rebuilt dirty checkout can therefore never masquerade
+/// as a clean commit. Empty when git is unavailable or the build tree
+/// is not a checkout.
 fn short_head_hash() -> String {
     let output = Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
+        .args([
+            "describe",
+            "--always",
+            "--abbrev=7",
+            "--dirty",
+            "--exclude",
+            "*",
+        ])
         .output();
     match output {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
