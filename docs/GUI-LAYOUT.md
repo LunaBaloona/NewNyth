@@ -94,8 +94,16 @@ assertions.
 ## Testing
 
 15. Layout bugs of this class live in egui's placement math and are
-    invisible to unit tests. The parked headless harness
-    (`.tmp-review/barspy`) renders the real UI without a window;
-    promoting it to CI should assert the rules above: widgets centred
-    on the card centre line, no text drawn outside header bars, and
-    stable positions under font scaling.
+    invisible to unit tests. The headless suite in `theme.rs`
+    (`mod layout_tests`) renders the real helpers and a replica of the
+    Buttons tab's pinned bar and three-strip block through
+    `egui::Context::run_pass` at fixed viewports, and asserts the rules
+    above on the painted shapes: widgets centred on the centre line,
+    text inside the header bars, row bands reaching the card edges, and
+    the scrollbar/fit invariants of the Buttons pane at every approved
+    width. It runs in CI with the normal `cargo test --workspace`.
+    Two harness caveats learned while calibrating it: galley origins in
+    centring/justified layouts are unreliable headlessly (assert on
+    allocation rects or widths instead), and if the strip math in
+    `app.rs::ui_buttons()` changes, the suite's replica must move with
+    it in the same PR so CI keeps catching overflow.
