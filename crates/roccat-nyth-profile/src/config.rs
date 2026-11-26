@@ -2,9 +2,10 @@
 //!
 //! Reads and writes the JSON files under `~/.config/newnyth/`:
 //! `openers.json` (per-profile, per-button launch commands),
-//! `autoswitch.json` (window app class to profile bindings) and
-//! `profile_names.json` (display names). The daemon reads all three,
-//! the GUI and nythctl write them.
+//! `autoswitch.json` (window app class to profile bindings),
+//! `profile_names.json` (display names) and `settings.json` (app
+//! preferences such as the desktop notification switch). The daemon
+//! reads them all, the GUI and nythctl write them.
 //!
 //! Every file carries a `version` field (absent counts as 1), so a
 //! later format change can migrate old files instead of failing to
@@ -78,6 +79,10 @@ fn backup_corrupt(path: &Path) {
 /// them into place in one step. Readers see either the old file or
 /// the new one, never a mixture.
 fn save_json<T: Serialize>(value: &T, path: &Path) -> Result<(), String> {
+    // A symlinked config (stow/chezmoi setups) is written through to
+    // its real target, so the link itself survives the atomic rename;
+    // a dangling link falls back to becoming a plain file.
+    let path = &resolve_target(path);
     let dir = path
         .parent()
         .ok_or_else(|| format!("{} has no parent directory", path.display()))?;
@@ -113,6 +118,12 @@ fn append_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_os_string();
     name.push(suffix);
     PathBuf::from(name)
+}
+
+/// Where a save really lands: the canonical file a symlink points at,
+/// or `path` itself when it is not a link or the link target is gone.
+fn resolve_target(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Path to the openers config file.
@@ -330,6 +341,57 @@ impl ProfileNames {
     }
 }
 
+/// Path to the app settings file.
+pub fn settings_path() -> PathBuf {
+    config_dir().join("settings.json")
+}
+
+/// App-level preferences: not tied to a profile or the device, edited
+/// by the GUI and honoured by the daemon. Currently just the desktop
+/// notification switch; the daemon's announcements for profile, CPI
+/// and sensitivity changes are useful but not everybody's taste, and
+/// a switch that only silences the popups is friendlier than a
+/// systemd override.
+///
+/// Stored as JSON: `{"version": 1, "notifications": true}`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AppSettings {
+    /// File format version; files without the field load as
+    /// [`CONFIG_FORMAT_VERSION`].
+    #[serde(default = "default_config_version")]
+    pub version: u32,
+    /// Master switch for the daemon's desktop notifications. Default
+    /// on, matching the behaviour before the switch existed.
+    #[serde(default = "default_notifications_on")]
+    pub notifications: bool,
+}
+
+fn default_notifications_on() -> bool {
+    true
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            version: CONFIG_FORMAT_VERSION,
+            notifications: true,
+        }
+    }
+}
+
+impl AppSettings {
+    /// Load from disk. Missing or invalid files mean notifications on
+    /// (the historical behaviour); an invalid file is backed up first.
+    pub fn load() -> Self {
+        load_json(&settings_path(), "app settings")
+    }
+
+    /// Save to disk atomically. Creates the config directory if needed.
+    pub fn save(&self) -> Result<(), String> {
+        save_json(self, &settings_path())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -451,10 +513,64 @@ mod tests {
             serde_json::to_string(&OpenersConfig::default()).unwrap(),
             serde_json::to_string(&AutoSwitchConfig::default()).unwrap(),
             serde_json::to_string(&ProfileNames::default()).unwrap(),
+            serde_json::to_string(&AppSettings::default()).unwrap(),
         ] {
             let value: serde_json::Value = serde_json::from_str(&json).unwrap();
             assert_eq!(value["version"], serde_json::json!(CONFIG_FORMAT_VERSION));
         }
+    }
+
+    #[test]
+    fn save_through_a_symlink_keeps_the_link() {
+        // stow/chezmoi-style setups symlink their configs into the
+        // config dir; the atomic save must write through the link and
+        // never replace it with a regular file.
+        let dir = scratch_dir("symlink");
+        let real = dir.join("real-autoswitch.json");
+        let link = dir.join("autoswitch.json");
+        std::fs::write(&real, "{}\n").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let mut cfg = AutoSwitchConfig {
+            enabled: true,
+            ..Default::default()
+        };
+        cfg.apps_for_profile_mut(0).push("kate".into());
+        save_json(&cfg, &link).unwrap();
+
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "the link itself must survive the atomic rename"
+        );
+        let back: AutoSwitchConfig =
+            serde_json::from_str(&std::fs::read_to_string(&real).unwrap()).unwrap();
+        assert!(back.enabled);
+        assert_eq!(back.profile_for_app("kate"), Some(0));
+        assert!(!dir.join("real-autoswitch.json.tmp").exists());
+    }
+
+    #[test]
+    fn app_settings_default_to_notifications_on() {
+        // The switch must not change behaviour for anybody until they
+        // touch it: missing file, missing field or broken file all
+        // mean "on", the behaviour before the switch existed.
+        assert!(AppSettings::default().notifications);
+        let fresh: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(fresh.notifications);
+
+        let dir = scratch_dir("settings");
+        let path = dir.join("settings.json");
+        let off = AppSettings {
+            version: CONFIG_FORMAT_VERSION,
+            notifications: false,
+        };
+        save_json(&off, &path).unwrap();
+        let back: AppSettings =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(back, off);
     }
 
     fn scratch_dir(label: &str) -> PathBuf {

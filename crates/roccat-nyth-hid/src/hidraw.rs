@@ -235,9 +235,20 @@ impl Drop for DeviceGuard<'_> {
 ///   3. If BUSY, wait `busy_wait_ms` (increasing each retry) and try again.
 ///   4. If OK, return success.
 ///   5. If CRITICAL or INVALID, return an error.
+///
+/// Unlike the original, a device stuck in BUSY cannot pin this call (and
+/// with it the exclusive device lock held by the caller) forever: the
+/// busy waits are bounded by [`BUSY_BUDGET`] of wall time, after which
+/// `Error::BusyTimeout` is returned and callers surface the failure.
+/// Real devices clear BUSY within a few hundred milliseconds; the whole
+/// budget exists for the pathological case of a half-hung device.
 pub fn check_write(dev: &HidrawDevice, init_wait_ms: u64, busy_wait_ms: u64) -> Result<()> {
+    /// Maximum wall time spent waiting for a busy device before giving up.
+    const BUSY_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
+
     std::thread::sleep(std::time::Duration::from_millis(init_wait_ms));
 
+    let started = std::time::Instant::now();
     let mut increasing_wait = busy_wait_ms;
     loop {
         let buf = dev.read_report::<3>(ReportId::Control as u8)?;
@@ -246,7 +257,13 @@ pub fn check_write(dev: &HidrawDevice, init_wait_ms: u64, busy_wait_ms: u64) -> 
         match status {
             ControlStatus::Ok => return Ok(()),
             ControlStatus::Busy => {
-                std::thread::sleep(std::time::Duration::from_millis(increasing_wait));
+                let wait = std::time::Duration::from_millis(increasing_wait);
+                if started.elapsed() + wait >= BUSY_BUDGET {
+                    return Err(Error::BusyTimeout {
+                        waited_ms: started.elapsed().as_millis() as u64,
+                    });
+                }
+                std::thread::sleep(wait);
                 increasing_wait += busy_wait_ms;
             }
             other => return Err(Error::DeviceStatus(other)),

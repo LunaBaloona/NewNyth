@@ -255,17 +255,44 @@ pub fn spawn_reaped(program: &str, args: &[&str]) -> Result<(), std::io::Error> 
 /// reaped like any other helper. Falls back to a plain spawn on systems
 /// without systemd-run.
 pub fn launch_app(program: &str, args: &[&str]) -> Result<(), std::io::Error> {
+    // `systemd-run` wraps any command line - including one whose program
+    // does not exist - and reports success: the spawn succeeds and
+    // nothing ever runs, so a typo would look like a NewNyth bug
+    // (2026-11 review round). Resolve the target first so a missing
+    // program surfaces as a real error to the caller's logging.
+    let resolved = resolve_program(program).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("program not found: {program}"),
+        )
+    })?;
+    let resolved = resolved.to_string_lossy();
     if systemd_run_available() {
         let mut wrapped: Vec<&str> = Vec::with_capacity(args.len() + 5);
         wrapped.extend_from_slice(&["--user", "--scope", "--collect", "--"]);
-        wrapped.push(program);
+        wrapped.push(&resolved);
         wrapped.extend_from_slice(args);
         match spawn_reaped("systemd-run", &wrapped) {
             Ok(()) => return Ok(()),
             Err(e) => log::debug!("systemd-run unavailable ({e}); spawning directly"),
         }
     }
-    spawn_reaped(program, args)
+    spawn_reaped(&resolved, args)
+}
+
+/// Locate `program` for launching: an explicit path (anything with a
+/// `/`) must exist as a file; a bare name is looked up on `PATH`,
+/// mirroring what a shell would resolve. `None` means nothing
+/// launchable by that name exists.
+fn resolve_program(program: &str) -> Option<std::path::PathBuf> {
+    let path = std::path::Path::new(program);
+    if program.contains('/') {
+        return (path.is_file()).then(|| path.to_path_buf());
+    }
+    let path_var = std::env::var_os("PATH")?;
+    std::env::split_paths(&path_var)
+        .map(|dir| dir.join(program))
+        .find(|candidate| candidate.is_file())
 }
 
 fn systemd_run_available() -> bool {
@@ -304,8 +331,33 @@ pub fn open_xdg_folder(xdg_name: &str) {
     }
 }
 
+/// Master switch for desktop notifications (the Settings tab's
+/// "Desktop notifications" checkbox, persisted in `settings.json` and
+/// reloaded by the daemon on config change). Status popups are handy
+/// but not universal; a stuck-informative daemon should be silenced
+/// without a systemd override. Defaults to on, the behaviour before
+/// the switch existed.
+static NOTIFICATIONS_ENABLED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(true);
+
+/// Set the notification switch (called at daemon startup and on every
+/// config reload).
+pub fn set_notifications_enabled(on: bool) {
+    NOTIFICATIONS_ENABLED.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether desktop notifications are currently wanted.
+pub fn notifications_enabled() -> bool {
+    NOTIFICATIONS_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Send a desktop notification via notify-send (available on KDE Plasma).
+/// Silently dropped while the Settings switch is off; callers keep
+/// logging unconditionally, so nothing is lost but the popup.
 pub fn send_notification(summary: &str, body: &str) {
+    if !notifications_enabled() {
+        return;
+    }
     let _ = spawn_reaped(
         "notify-send",
         &[
@@ -424,7 +476,7 @@ fn run_media_cmd(program: &str, args: &[&str]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{NythEvent, parse_event, xdg_folder_for_windows_subtype};
+    use super::{NythEvent, parse_event, resolve_program, xdg_folder_for_windows_subtype};
     use roccat_nyth_hid::protocol::SpecialReport;
 
     fn report(event_type: u8, data1: u8, data2: u8) -> SpecialReport {
@@ -551,5 +603,17 @@ mod tests {
         assert_eq!(xdg_folder_for_windows_subtype(0x08), Some("PICTURES"));
         assert_eq!(xdg_folder_for_windows_subtype(0x01), None);
         assert_eq!(xdg_folder_for_windows_subtype(0x09), None);
+    }
+
+    #[test]
+    fn resolve_program_finds_path_executables_and_rejects_nonsense() {
+        let sh = resolve_program("sh").expect("sh must resolve via PATH");
+        assert!(sh.is_file());
+        assert!(resolve_program("/bin/sh").is_some());
+        assert!(resolve_program("/bin/definitely-not-here").is_none());
+        // A bogus bare name must fail rather than be wrapped into a
+        // systemd-run scope that silently runs nothing: this is what
+        // makes a typo'd Open-application command report a real error.
+        assert!(resolve_program("newnyth-test-missing-program").is_none());
     }
 }

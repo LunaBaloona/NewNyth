@@ -2160,6 +2160,47 @@ impl NythConfigApp {
 
         ui.add_space(8.0);
 
+        // App-level daemon preference, saved on the spot: it is not a
+        // per-profile edit and nothing needs reverting, so it skips
+        // the save bar (the status line confirms each change). Off
+        // silences the daemon's pop-ups without touching anything
+        // else; the daemon reloads settings.json within a second even
+        // if the D-Bus nudge fails.
+        let mut notifications = self.state.app_settings.notifications;
+        if ui
+            .checkbox(&mut notifications, "Desktop notifications")
+            .changed()
+        {
+            self.state.app_settings.notifications = notifications;
+            match self.state.save_settings() {
+                Ok(()) => match DeviceState::notify_daemon_config_changed() {
+                    Ok(()) => self.set_status(
+                        if notifications {
+                            "Desktop notifications enabled"
+                        } else {
+                            "Desktop notifications disabled"
+                        },
+                        ctx,
+                    ),
+                    Err(e) => {
+                        log::warn!("Saved, but could not notify daemon: {e}");
+                        self.set_status(
+                            "Saved - daemon unreachable, it will reload the file shortly",
+                            ctx,
+                        );
+                    }
+                },
+                Err(e) => self.set_status(format!("Could not save settings: {e}"), ctx),
+            }
+        }
+        ui.label(
+            egui::RichText::new("Pop-ups announcing profile, CPI and sensitivity changes.")
+                .small()
+                .weak(),
+        );
+
+        ui.add_space(8.0);
+
         if !self.state.autoswitch.enabled {
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Auto-switching is disabled.").weak());
