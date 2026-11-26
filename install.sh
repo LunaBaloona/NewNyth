@@ -222,12 +222,24 @@ sudo install -Dm644 packaging/io.github.LunaBaloona.NewNythMini.appdata.xml \
 # daemon no permission to open the mouse.
 echo "Enabling the background daemon..."
 DAEMON_OK=0
+# A re-install over a running daemon must hand over to the new binary:
+# `enable --now` never touches an active service, so without the
+# explicit restart below the freshly installed nythd would sit on disk
+# while the previous process kept serving until the next login. This
+# bit us during the PR #35 hardware pass: every fix looked broken while
+# an old daemon from before the upgrade was still answering the bus.
+DAEMON_WAS_RUNNING=0
+systemctl --user is-active --quiet nythd && DAEMON_WAS_RUNNING=1
 if [ "$GROUP_JUST_ADDED" = 1 ]; then
     if systemctl --user enable nythd 2>/dev/null; then
         DAEMON_OK=1
     fi
 elif systemctl --user enable --now nythd 2>/dev/null; then
     DAEMON_OK=1
+fi
+if [ "$DAEMON_OK" = 1 ] && [ "$DAEMON_WAS_RUNNING" = 1 ]; then
+    echo "Restarting the running daemon so the new version takes over..."
+    systemctl --user restart nythd
 fi
 
 echo ""
@@ -238,7 +250,12 @@ if [ "$GROUP_JUST_ADDED" = 1 ] && [ "$DAEMON_OK" = 1 ]; then
     echo "only takes effect after logging out and back in. From then on the daemon"
     echo "starts automatically on login."
 elif [ "$DAEMON_OK" = 1 ]; then
-    echo "The daemon is running and will start automatically on login."
+    if [ "$DAEMON_WAS_RUNNING" = 1 ]; then
+        echo "The previously running daemon was restarted onto the new version;"
+        echo "it will start automatically on login."
+    else
+        echo "The daemon is running and will start automatically on login."
+    fi
 else
     echo "Could not reach the systemd user session. Enable and start the daemon"
     echo "yourself:"

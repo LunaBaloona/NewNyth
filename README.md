@@ -192,6 +192,11 @@ newnyth-mini
 | Arch `makepkg` | `git pull` in the checkout, then `makepkg -si` |
 | `install.sh` | `git pull`, then `./install.sh` again |
 
+> The daemon runs inside your login session, so package managers cannot
+> restart it. After a `.deb`/`.rpm` upgrade, hand the mouse over to the
+> new binary yourself: `systemctl --user restart nythd`. The `install.sh`
+> and tarball installers do this restart for you.
+
 > Everything is distributed from this repository's
 > [Releases page](https://github.com/LunaBaloona/NewNyth/releases). The
 > [apt and dnf repositories](#package-repositories-apt--dnf) mirror every
