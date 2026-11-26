@@ -2,7 +2,7 @@
 
 use roccat_nyth_hid::protocol::*;
 use roccat_nyth_profile::NythDevice;
-use roccat_nyth_profile::config::{AutoSwitchConfig, OpenersConfig, ProfileNames};
+use roccat_nyth_profile::config::{AppSettings, AutoSwitchConfig, OpenersConfig, ProfileNames};
 
 /// Session-bus connection with a call timeout. zbus 5 sets timeouts per
 /// connection (dbus 0.9 set them per proxy), so each GUI client call opens
@@ -55,6 +55,10 @@ pub struct DeviceState {
     pub autoswitch: AutoSwitchConfig,
     /// PC-side profile display names (the device has no name field).
     pub profile_names: ProfileNames,
+    /// App-level preferences (the desktop notification switch), loaded
+    /// from `settings.json`. Not device state, but this is the one
+    /// loaded-everywhere config holder the GUI reads at startup.
+    pub app_settings: AppSettings,
     /// Device-level TCU/DCU state, read on (re)connect.
     pub control_unit: Option<ControlUnitReport>,
 }
@@ -72,6 +76,9 @@ impl DeviceState {
             openers: OpenersConfig::default(),
             autoswitch: AutoSwitchConfig::default(),
             profile_names: ProfileNames::default(),
+            // App preferences are plain files; read them even without
+            // a device so the Auto-switch tab shows the live switch.
+            app_settings: AppSettings::load(),
             control_unit: None,
         }
     }
@@ -98,6 +105,7 @@ impl DeviceState {
             openers: OpenersConfig::load(),
             autoswitch: AutoSwitchConfig::load(),
             profile_names: ProfileNames::load(),
+            app_settings: AppSettings::load(),
             control_unit: nyth.read_control_unit().ok(),
         };
 
@@ -268,6 +276,10 @@ impl DeviceState {
 
     pub fn save_profile_names(&self) -> Result<(), String> {
         self.profile_names.save()
+    }
+
+    pub fn save_settings(&self) -> Result<(), String> {
+        self.app_settings.save()
     }
 
     /// Tell the daemon to reload its config files.
