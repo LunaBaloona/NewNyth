@@ -179,7 +179,8 @@ fi
 if ! id -nG "$USER" | grep -qw roccat; then
     sudo usermod -aG roccat "$USER"
     GROUP_JUST_ADDED=1
-    echo "  Added $USER to roccat group (log out and back in to take effect)"
+    echo "  Added $USER to roccat group (needed only for TTY/SSH access;"
+    echo "  desktop logins get it via uaccess). Log out and back in to take effect."
 fi
 
 # Reload udev
