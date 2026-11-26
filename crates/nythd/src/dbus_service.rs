@@ -65,6 +65,13 @@ impl NythIface {
     #[zbus(name = "ProfileChangedOutside")]
     async fn profile_changed_outside(&self, number: u8) {
         log::info!("D-Bus: ProfileChangedOutside({})", number);
+        // The Nyth has exactly five profiles (1-based on the bus). A
+        // nonsense byte must not poison the daemon's view of the active
+        // profile (the main loop would later try to act on it).
+        if !(1..=5).contains(&number) {
+            log::warn!("D-Bus: ignoring out-of-range profile number {number} (expected 1..=5)");
+            return;
+        }
         if let Ok(mut s) = self.state.lock() {
             s.active_profile = number;
         }
@@ -81,8 +88,13 @@ impl NythIface {
     #[zbus(name = "OpenGui")]
     async fn open_gui(&self) {
         log::info!("D-Bus: OpenGui requested");
-        let _ = crate::events::launch_app("newnyth", &[])
-            .or_else(|_| crate::events::launch_app("nythctl", &[]));
+        // No nythctl fallback: run with no arguments it only prints
+        // help, which the requester would never see. A warning is the
+        // honest failure (and launch_app now really fails when the
+        // binary is missing).
+        if let Err(e) = crate::events::launch_app("newnyth", &[]) {
+            log::warn!("OpenGui: could not launch the NewNyth GUI: {e}");
+        }
     }
 
     #[zbus(name = "WindowActivated")]
