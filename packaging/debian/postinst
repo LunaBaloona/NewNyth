@@ -21,9 +21,11 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 if [ "$1" = configure ]; then
-    echo ">>> IMPORTANT: give your user device access:"
+    echo ">>> Desktop (logind) sessions get device access through the"
+    echo ">>> udev rule's uaccess tag. From a TTY or over SSH, grant"
+    echo ">>> yourself the group instead:"
     echo ">>>   sudo usermod -aG roccat \$USER"
-    echo ">>> then log out and back in."
+    echo ">>> (then log out and back in)."
     echo ""
     echo ">>> Start the event daemon:"
     echo ">>>   systemctl --user enable --now nythd"

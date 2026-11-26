@@ -7,3 +7,5 @@ Terminal=false
 Type=Application
 Categories=Settings;HardwareSettings;
 Keywords=mouse;roccat;nyth;gaming;profile;
+# Matches the app id newnyth-mini reports to the windowing system.
+StartupWMClass=newnyth-mini

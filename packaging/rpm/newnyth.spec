@@ -83,9 +83,11 @@ install -Dm644 "$SRCDIR/packaging/io.github.LunaBaloona.NewNythMini.appdata.xml"
 touch --no-create /usr/share/icons/hicolor 2>/dev/null || :
 gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || :
 if [ $1 -eq 1 ]; then
-    echo ">>> IMPORTANT: give your user device access:"
+    echo ">>> Desktop (logind) sessions get device access through the"
+    echo ">>> udev rule's uaccess tag. From a TTY or over SSH, grant"
+    echo ">>> yourself the group instead:"
     echo ">>>   sudo usermod -aG roccat \$USER"
-    echo ">>> then log out and back in."
+    echo ">>> (then log out and back in)."
     echo ""
     echo ">>> Start the event daemon:"
     echo ">>>   systemctl --user enable --now nythd"
@@ -114,6 +116,20 @@ gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || :
 /usr/share/icons/hicolor/128x128/apps/newnyth.png
 
 %changelog
+* Thu Nov 26 2026 NewNyth Contributors - 0.9.5-1
+- Release-hardening snapshot on the way to 1.0: documented API/config
+  freeze, versioned JSON configs with atomic saves and .bak recovery,
+  exclusive device locking with an echoed-index check, signed apt/dnf
+  repositories, and packaging/desktop-entry polish.
+
+* Sat Nov 07 2026 NewNyth Contributors - 0.9.4-1
+- PC-side profile names with inline rename and tooltips.
+- TCU surface-calibration wizard and DCU lift-off keep/discard dialog.
+
+* Sat Nov 07 2026 NewNyth Contributors - 0.9.3-1
+- .deb and .rpm built automatically by the release workflow.
+- install.sh uninstall modes; Rust edition 2024; wording pass.
+
 * Thu Nov 05 2026 NewNyth Contributors - 0.9.2-1
 - Prebuilt-binary packaging: .deb + .rpm alongside the release tarball
 - udev rule, roccat group creation, systemd user service, desktop entries
