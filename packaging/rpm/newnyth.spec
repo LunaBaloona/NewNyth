@@ -116,11 +116,13 @@ gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || :
 /usr/share/icons/hicolor/128x128/apps/newnyth.png
 
 %changelog
-* Thu Nov 26 2026 NewNyth Contributors - 0.9.5-1
-- Release-hardening snapshot on the way to 1.0: documented API/config
-  freeze, versioned JSON configs with atomic saves and .bak recovery,
+* Fri Nov 27 2026 NewNyth Contributors - 1.0.0-1
+- First stable release: D-Bus interface, command lines and config file
+  formats frozen (see docs/API-STABILITY.md). Documented API freeze,
+  versioned JSON configs with atomic saves and .bak recovery,
   exclusive device locking with an echoed-index check, signed apt/dnf
-  repositories, and packaging/desktop-entry polish.
+  repositories, review-round runtime hardening, desktop notifications
+  switch, packaging/desktop-entry polish.
 
 * Sat Nov 07 2026 NewNyth Contributors - 0.9.4-1
 - PC-side profile names with inline rename and tooltips.

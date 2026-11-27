@@ -5,7 +5,12 @@ All notable changes to NewNyth are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-11-27
+
+First stable release. NewNyth is feature complete for the Roccat Nyth,
+and its public surface - the D-Bus interface, the command lines and the
+config file formats - is frozen for all of 1.x
+([stability promise](docs/API-STABILITY.md)).
 
 ### Added
 
@@ -15,6 +20,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   machines get NewNyth updates through `apt upgrade` / `dnf upgrade`.
   Repository metadata is GPG-signed; the signing key setup and rotation
   procedure live in `docs/RELEASING.md`.
+- Every binary reports its build revision (`newnyth --version` prints
+  `1.0.0 #<commit>`), rebuilt working trees are marked `-dirty`, so a
+  bug report can name the exact code that ran.
+- Exclusive device access: a file lock on the hidraw node plus an
+  echoed profile-index check mean the GUI, Mini, daemon and `nythctl`
+  can no longer write to the mouse on top of each other.
+- A keep/discard prompt when unsaved edits would otherwise be lost.
+- Versioned config files: every JSON carries a `version` field, and a
+  file that fails to parse is copied to `<name>.bak` before NewNyth
+  replaces it, so a broken hand edit is never lost without trace.
+- AppStream metainfo and reverse-DNS desktop entries
+  (`io.github.LunaBaloona.*`) installed by every channel, with
+  `StartupWMClass` so Plasma groups the windows correctly.
+- A "Desktop notifications" switch on the Auto-Switch tab
+  (`settings.json`): the daemon's profile, CPI and sensitivity pop-ups
+  can be silenced without a systemd override, and the daemon picks the
+  switch up live.
+- A headless GUI layout test suite runs in CI: the centring rules of
+  `docs/GUI-LAYOUT.md`, the Buttons-tab strip math and the scrollbar
+  invariants are asserted on painted shapes at fixed viewports and any
+  text scale.
+- CONTRIBUTING.md and issue/PR templates for contributors.
 
 ### Changed
 
@@ -59,9 +86,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   centred above the custom name, spanning the full width between the
   pencil button and the Default checkbox, each line ellipsised only
   if even it cannot fit.
-- The in-development version moved from 0.9.4 to 0.9.5 (window footer
-  and `--version` report it). This is a development marker only: the
-  next published release remains 1.0.0.
+- The udev rule tags the device with systemd's `uaccess` and the group
+  is declared via sysusers: a desktop (logind) session gets device
+  access with no group setup at all. The `roccat` group remains for
+  raw TTY and SSH sessions, and every installer message now says so
+  instead of demanding the group.
+- Applications launched by mouse buttons run in their own systemd
+  scope, so they survive an `nythd` restart.
+- Re-running either installer restarts a running daemon so the new
+  binary takes over immediately instead of at the next login; for
+  `.deb`/`.rpm` upgrades, `systemctl --user restart nythd` does it.
+- Launch targets are resolved before `systemd-run` wraps them, so a
+  missing or typo'd "Open application" program now produces a journal
+  warning and a "Launch failed" pop-up instead of silently doing
+  nothing.
 
 ### Removed
 
@@ -76,6 +114,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently creating a duplicate whose winning profile was arbitrary.
   Duplicates left in hand-edited configs now resolve deterministically
   to the lowest-numbered profile that lists the app.
+- The daemon keeps in step with profile changes made by the GUI, Mini
+  or `nythctl`, and no longer reverts a hardware profile switch it did
+  not make itself.
+- Long labels containing multi-byte characters no longer crash the GUI
+  when truncated.
+- Child processes (media keys, launch helpers) are reaped: no more
+  zombie entries in `ps`.
+- A device stuck answering "busy" can no longer freeze every NewNyth
+  tool: the control-register wait gives up after five seconds and the
+  failed write is reported.
+- Out-of-range profile numbers on D-Bus (outside 1..=5) are ignored
+  with a warning instead of corrupting the daemon's view of the active
+  profile.
+- "Capture window" no longer captures the Mini switcher as if it were
+  an ordinary application.
+- Atomic config saves write through symlinked files (stow/chezmoi
+  dotfile setups) instead of replacing the link with a regular file.
 
 ## [0.9.4] - 2026-11-07
 
@@ -209,7 +264,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Wayland app auto-switch and Arch packaging. Earlier history was not
   tracked in a changelog.
 
-[Unreleased]: https://github.com/LunaBaloona/NewNyth/compare/v0.9.4...HEAD
+[1.0.0]: https://github.com/LunaBaloona/NewNyth/compare/v0.9.4...v1.0.0
 [0.9.4]: https://github.com/LunaBaloona/NewNyth/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/LunaBaloona/NewNyth/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/LunaBaloona/NewNyth/compare/v0.9.1...v0.9.2
