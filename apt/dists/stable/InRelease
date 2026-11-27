@@ -5,33 +5,33 @@ Origin: NewNyth
 Label: NewNyth
 Suite: stable
 Codename: stable
-Date: Sat, 07 Nov 2026 18:37:31 UTC
+Date: Fri, 27 Nov 2026 19:52:54 UTC
 Architectures: amd64
 Components: main
 Description: NewNyth Linux driver packages for Debian and Ubuntu
 MD5Sum:
- eb9977e68f36ef6e9ddfdb0a6dacbb3a 1386 main/binary-amd64/Packages
- 1f4bf745ecc409b772f5ca3a04fba371 837 main/binary-amd64/Packages.gz
+ 74155510a068d006e43d1c55c969aeb8 1431 main/binary-amd64/Packages
+ cbf20fb0f9c969ae60e787e2922e8664 860 main/binary-amd64/Packages.gz
  4fc80b19d3dc856d78a857fd19544eba 148 main/binary-amd64/Release
 SHA1:
- 1349c9b74767db6bb2d64f18ca3cd6df437f23e5 1386 main/binary-amd64/Packages
- d2bc8c38a75996907cafd903c2ad9d5d98d0440d 837 main/binary-amd64/Packages.gz
+ 688e7629cde4b1a5fe3cd7cc55340a29bb3009b5 1431 main/binary-amd64/Packages
+ d72fba92c69496aada150c2a6999e0fc8d88e316 860 main/binary-amd64/Packages.gz
  216760939082cb4fb12734cca8c8816e9e2f1ab1 148 main/binary-amd64/Release
 SHA256:
- 10ea7de16322459808f22c94e29f98900e12da6bbee895bf77e69087707dfac6 1386 main/binary-amd64/Packages
- 554412fc39abe2df6f8e47d400c096562d2567c03cec8b17df48356d4bc7c687 837 main/binary-amd64/Packages.gz
+ 074694db9b5cee1738a0224d8561ee0ddb71668faee9e5626a37f1df0e79a039 1431 main/binary-amd64/Packages
+ 432bdeec38c5ddac1e706bfb1adfcb5cc44a9065ea181b98b4cf0d1c2d45373f 860 main/binary-amd64/Packages.gz
  fd8ef8c5b4bb5c110a5a0daca62e8f5059f54b43afd05334fe7f92fe057c0015 148 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQGzBAEBCgAdFiEEJP5lDJMZchhAuBVFjUSE4JyJtyAFAmrvb+sACgkQjUSE4JyJ
-tyD22Av/Rpu1Zo3Ej3KZPkuQzOGlP2VEdbk+ztNZ2l/EhezonOtFz3SM7s65iDzy
-WhAwIRBi41a9ScZC6fKvln389OwTMzA655Iq6j8FTri/GKbrpSQbSW9/VuogwHCQ
-K1BCuJ52bCQ53YK06lqwdYSl4rX6I5zQHBRTTBZvd8ISFRISdw/L1MnYDrdePw6f
-09VKhXM2UAbH69r/FBnrUQK8cJcZql01EsYzHdUK1Ha6n2ruWBv9DlmNQb6uB2dZ
-y0f9zNqAzUPVwGXxGBgMBo5XvsQqWotdBQUv+KHczYqyQIbiNemu6M815l6soI4w
-J0SdNZQFc4xTOIe4qmPxDePQ0a8QesMNfAqIbbTZ+NPcIqa0OVkTZpkOXbgV83q2
-SLu0hFUWEKlpzrOE6ipAz0Y8Xiv82rKnwU3yoLceeeB51FqaE3AUMRDne4FQ/Krh
-sRACqzLVz1iUVslnVo8iLMBzgUZ94O7kUl+lr1b9CaV8wQGsNNDuB4F55D4d58+S
-4Hc0G1Tp
-=jQN2
+iQGzBAEBCgAdFiEEJP5lDJMZchhAuBVFjUSE4JyJtyAFAmsJ35YACgkQjUSE4JyJ
+tyA+eAv7BAThRAOXs9UgK0gkTTalXwxBArYkdmfKazKaCbxG4HKRmCiHtF0ZzjlF
+dDzEUR22dzQRcPpEoP/OFM7bD4f6dVW6+DriAy0OcwwcaiXV7Nw2nT/It+cZlImv
+DTrgFeVmoYZr0HEgtXdaixQ4HwcBkflYdV3SC7XebXpdZ5iLs/+W5Z6Q01SAVS00
+fLEBae3cxmN12rtSBGtGbIkqqgIdissoumU0PDmCAAsWBYg0a+1lEWVQ1+MI0W+J
+/Aa6TzMethMspfH8KIcA9cB3w7/FofEbzZbuJiL4LQNjRfSt3Vc+G8RUILYSpz5E
+KKVl/VbzeaviLjvfrFJCO3cd3Y0WhmKQ7oDKEPZmFymJBVgTnYNHRXW78LQk2etG
+ss230t13kQPv36fqIoYOqEEGYf+h9fueegY+tkq6PbUBRcltoRyj/i/EBOEo0NfV
+Gb/D1gCC7GQ+1rNNgQmoRJucXNn7I3woSOy6ahqBqCX9SS8fJkctgQJFMAgfg8du
+KU+fny0s
+=DXWp
 -----END PGP SIGNATURE-----
