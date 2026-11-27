@@ -5,6 +5,10 @@
 [![Build](https://github.com/LunaBaloona/NewNyth/actions/workflows/build.yml/badge.svg)](https://github.com/LunaBaloona/NewNyth/actions/workflows/build.yml)
 [![Licence: GPL-2.0-or-later](https://img.shields.io/badge/licence-GPL--2.0--or--later-blue.svg)](LICENSE)
 
+**1.0 is stable:** the D-Bus interface, the command lines and the config
+file formats are frozen from this release; upgrades replace packages or
+binaries only. See [API stability](docs/API-STABILITY.md).
+
 Ported from the original [roccat-tools](https://sourceforge.net/projects/roccat/) C codebase (v5.9.1, GPL-2.0+) by Stefan Achatz. For this project, only the Nyth-specific code has been carried forward, and all other device support has been omitted. See [NOTICE](NOTICE) for attribution details.
 
 ## Why NewNyth when there's roccat-tools? 
@@ -18,9 +22,9 @@ Note that because I started this for my own use, it's built for use on KDE and W
 ## Features
 
 - **Full device control:** CPI levels, polling rate, sensitivity, lighting effects and colours, button remapping, and profile switching on all 5 profiles.
-- **Configuration GUI** (`newnyth`): egui-based desktop app with 5 tabs: Settings, Lighting, Buttons, Auto-switch, Advanced
+- **Configuration GUI** (`newnyth`): egui-based desktop app with 5 tabs: Settings, Buttons, Advanced, Lighting, Auto-switch
 - **Profile auto-switch:** Automatically switches the mouse profile when you focus different application windows (in KDE Plasma, on Wayland)
-- **Mini switcher** (`newnyth-mini`):  a small floating window with quick profile switch buttons. Useful if you don't have KDE or Wayland or just want to manually switch profiles. 
+- **Mini switcher** (`newnyth-mini`): a small floating window with quick profile switch buttons. Useful if you don't have KDE or Wayland, or just want to manually switch profiles.
 - **Background daemon** (`nythd`): Reads hardware events, handles media keys, launches applications from button presses, emits D-Bus signals.
 - **CLI tool** (`nythctl`): device status, profile switching and driver-mode control for scripts and automations. Writing settings (CPI, lighting, buttons) is GUI-only for now.
 - **Systemd user service**: Starts automatically on login
@@ -34,29 +38,34 @@ Note that because I started this for my own use, it's built for use on KDE and W
 
 ## Screenshots
 
-**Settings panel** - CPI levels, polling rate, and sensitivity.
+**Settings panel** - CPI levels with per-level toggles, and sensitivity.
 
-![NewNyth settings panel](docs/screenshots/NewNyth_Main_UIv3.png)
+![NewNyth settings panel](docs/screenshots/NewNyth_Settings_v4.png)
 
 
-**Buttons panel** - Map your buttons to various keys and functions.
+**Buttons panel** - Map all 40 buttons (standard and EasyShift layers) to keys, actions and applications.
 
-![NewNyth button mapping panel](docs/screenshots/NewNyth_Mapping_UIv3.png)
+![NewNyth button mapping panel](docs/screenshots/NewNyth_Mapping_v4.png)
+
+
+**Advanced panel** - Independent X/Y sensitivity, polling rate, lift-off detection and lift-off distance.
+
+![NewNyth advanced panel](docs/screenshots/NewNyth_Advanced_v4.png)
 
 
 **Lighting panel** - Colours, light effects and colour effects for both light zones.
 
-![NewNyth lighting panel](docs/screenshots/Lighting_UIv3.png)
+![NewNyth lighting panel](docs/screenshots/NewNyth_Lighting_v4.png)
 
 
-**Profile Auto-switch panel** - Control how we switch profiles depending on the application you're on.
+**Profile Auto-switch panel** - Control how we switch profiles depending on the application you're on, name your profiles, and toggle desktop notifications.
 
-![NewNyth profile auto-switch panel](docs/screenshots/NewNyth_ProfileAutoSwitch_UIv3.png)
+![NewNyth profile auto-switch panel](docs/screenshots/NewNyth_AutoSwitch_v4.png)
 
 
-**NewNyth Mini** - A companion app that simply lets you select a profile. 
+**NewNyth Mini** - A companion app that simply lets you select a profile.
 
-![NewNyth Mini profile switcher](docs/screenshots/NewNyth_Mini.png)
+![NewNyth Mini profile switcher](docs/screenshots/NewNyth_Mini_v4.png)
 
 
 ## Installation
@@ -216,17 +225,19 @@ newnyth-mini
 
 ### `newnyth` - configuration GUI
 
-**Settings panel** - CPI levels 1–5 (200–12,000 DPI, with individual enable toggles and active-level selector), polling rates (125/250/500/1000 Hz), and of course sensitivity (with optional independent X/Y axes).
+**Settings panel** - CPI levels 1-5 (200-12,000, with individual enable toggles and active-level selector) and sensitivity.
 
 **Lighting panel** - On/Off toggle, custom colour pickers for both light zones (logo and bottom), light effects (fully lit, blinking, breathing, heartbeat) with speed control, and colour effects (off, simultaneously, up, down). Everything on this panel is written straight to the device and stays with the profile; the Nyth offers exactly this fixed set of effects, not arbitrary animation, so the panel has no more to give. The colour-effect directions are the least-exercised corner: if one looks wrong on your unit, please report it. (But who uses RGB anymore)
 
-**Buttons panel** - Remap all 40 buttons (20 standard + 20 EasyShift layer). Side-by-side columns for easy comparison, grouped by main buttons (left, right, middle, wheel up/down, top, fin left/right) and side buttons (Side 1–12 with separators every 4 buttons). Select a button to configure:
+**Buttons panel** - Remap all 40 buttons (20 standard + 20 EasyShift layer). Side-by-side columns for easy comparison, grouped by main buttons (left, right, middle, wheel up/down, top, fin left/right) and side buttons (Side 1-12 with separators every 4 buttons). Select a button to configure:
 
-- **Shortcut** - Modifier checkboxes (Ctrl/Shift/Alt/Win) + 90+ HID keycodes including extended function keys F13–F24, numpad, arrows, system keys
+- **Shortcut** - Modifier checkboxes (Ctrl/Shift/Alt/Win) + 90+ HID keycodes including extended function keys F13-F24, numpad, arrows, system keys
 - **Open application** - Launch any command when the button is pressed (now stored in `~/.config/newnyth/openers.json`)
 - Plus 40+ built-in actions: scrolling, media keys, profile cycling, CPI up/down, EasyShift, EasyAim, and more
 
-**Auto-switch panel** - Yes, just like Swarm used to do on MS Windows. With NewNyth can configure up to 10 application bindings per profile. Click "Capture window" and then click any application window - its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active. (Requires KDE Plasma on Wayland: the tracker drives KWin's scripting API, so other compositors and X11 are not supported. Outside KDE use the Mini switcher to change profiles by hand.)
+**Advanced panel** - Independent X/Y sensitivity (with its own enable switch), polling rate (125/250/500/1000 Hz), lift-off detection (Tracking Control Unit) and lift-off distance (Distance Control Unit). Tracking and lift-off distance are mouse-wide: they apply immediately and are shared by all profiles.
+
+**Auto-switch panel** - Yes, just like Swarm used to do on MS Windows. With NewNyth, you can configure up to 10 application bindings per profile. Click "Capture" and then click any application window - its class name is automatically captured. When auto-switch is enabled, the mouse profile changes automatically as you focus different windows. Optional default profile used when no bound app is active, display names for each profile (shown in notifications), and a desktop notifications switch to silence the pop-ups. (Requires KDE Plasma on Wayland: the tracker drives KWin's scripting API, so other compositors and X11 are not supported. Outside KDE use the Mini switcher to change profiles by hand.)
 
 ### `nythd` - event daemon
 
@@ -283,7 +294,7 @@ dbus-monitor --session "interface='org.roccat.Nyth'"
 The bus name `org.roccat.Nyth` is shared with the (unmaintained)
 roccat-tools: if both are installed, whichever service starts first
 keeps the name and the other runs without D-Bus. The name is kept
-deliberately for compatibility with existing integrations. From 1.0
+deliberately for compatibility with existing integrations. Since 1.0
 this interface, the command lines and the config files are frozen:
 see [API stability](docs/API-STABILITY.md).
 
@@ -331,6 +342,11 @@ NewNyth/
 │   ├── workflows/build.yml        # CI pipeline
 │   ├── workflows/release.yml      # Tag → GitHub Release (tarball + deb + rpm)
 │   └── ISSUE_TEMPLATE/            # Bug report, feature request
+├── docs/
+│   ├── API-STABILITY.md           # What the 1.0 release freezes
+│   ├── RELEASING.md               # Tag -> Release -> repo mirroring
+│   ├── GUI-LAYOUT.md              # egui layout notes and pitfalls
+│   └── screenshots/               # Images used by this README
 └── crates/
     ├── roccat-nyth-hid/           # Low-level HID protocol and ioctl
     ├── roccat-nyth-profile/       # High-level device API + config files
