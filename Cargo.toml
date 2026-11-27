@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.9.5"
+version = "1.0.0"
 edition = "2024"
 # eframe/egui 0.37 is what forces this MSRV (its own rust-version is 1.95).
 rust-version = "1.95"

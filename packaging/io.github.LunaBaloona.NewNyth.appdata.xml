@@ -22,5 +22,10 @@
   <url type="vcs-browser">https://github.com/LunaBaloona/NewNyth</url>
   <developer_name>LunaBaloona</developer_name>
   <launchable type="desktop-id">io.github.LunaBaloona.NewNyth.desktop</launchable>
+  <releases>
+    <release version="1.0.0" date="2026-11-27" type="stable">
+      <url type="details">https://github.com/LunaBaloona/NewNyth/releases/tag/v1.0.0</url>
+    </release>
+  </releases>
   <content_rating type="oars-1.1"/>
 </component>
