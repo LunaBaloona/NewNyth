@@ -5,7 +5,7 @@ Origin: NewNyth
 Label: NewNyth
 Suite: stable
 Codename: stable
-Date: Fri, 27 Nov 2026 19:52:54 UTC
+Date: Fri, 27 Nov 2026 19:53:45 UTC
 Architectures: amd64
 Components: main
 Description: NewNyth Linux driver packages for Debian and Ubuntu
@@ -23,15 +23,15 @@ SHA256:
  fd8ef8c5b4bb5c110a5a0daca62e8f5059f54b43afd05334fe7f92fe057c0015 148 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iQGzBAEBCgAdFiEEJP5lDJMZchhAuBVFjUSE4JyJtyAFAmsJ35YACgkQjUSE4JyJ
-tyA+eAv7BAThRAOXs9UgK0gkTTalXwxBArYkdmfKazKaCbxG4HKRmCiHtF0ZzjlF
-dDzEUR22dzQRcPpEoP/OFM7bD4f6dVW6+DriAy0OcwwcaiXV7Nw2nT/It+cZlImv
-DTrgFeVmoYZr0HEgtXdaixQ4HwcBkflYdV3SC7XebXpdZ5iLs/+W5Z6Q01SAVS00
-fLEBae3cxmN12rtSBGtGbIkqqgIdissoumU0PDmCAAsWBYg0a+1lEWVQ1+MI0W+J
-/Aa6TzMethMspfH8KIcA9cB3w7/FofEbzZbuJiL4LQNjRfSt3Vc+G8RUILYSpz5E
-KKVl/VbzeaviLjvfrFJCO3cd3Y0WhmKQ7oDKEPZmFymJBVgTnYNHRXW78LQk2etG
-ss230t13kQPv36fqIoYOqEEGYf+h9fueegY+tkq6PbUBRcltoRyj/i/EBOEo0NfV
-Gb/D1gCC7GQ+1rNNgQmoRJucXNn7I3woSOy6ahqBqCX9SS8fJkctgQJFMAgfg8du
-KU+fny0s
-=DXWp
+iQGzBAEBCgAdFiEEJP5lDJMZchhAuBVFjUSE4JyJtyAFAmsJ38kACgkQjUSE4JyJ
+tyBRpQv/YkUs3JVSAuwHTDjgE8QL7FrcAWWO2okXUHGGcz9e2GjDgrfAUNPl3c57
+URCI7ZXT+c6NX7p5NTurctAAT+1W3ZEqvm8NC0DwrZ5Np5U/1T9UTwI828b1o8nb
+DSWNMzoN5aAV8Gk+htxMMj3EJ2UY63wC1JKmnE1/Xv/ATD66Qk7b2rDhrR7MlKxS
+RgafHjO0gYK3Spvn3HqjwtKrdwrlhEalRhLtzO/WkOtj8DX0clq6SaRskzRRAmhD
+ayI9DNcghNozQcrGiIdcPKgHYelB9lrPrynFH2M7hpl+XgAFv9LPENXxAG0UiDKn
+HBNWl6/aasaal2PvhGaGoi2VSKAjQLpY8czurxt4EGAR2GBstBQNBhhBEsQj79oe
+QeiislaZcFBi0Je0KkLo4ZuC0L80WkLqcvYVTDTwnMimA7C5fvdiiAsydMwfVMeX
+yvlsWg2o+tcfLuth7ugfob8m5aHaGguxHQgm12B6x4Pdg2Q2KPNt5+3QVTrYUEru
+DB907Xep
+=YV43
 -----END PGP SIGNATURE-----
